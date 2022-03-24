@@ -166,7 +166,8 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
         for name, p in model.named_parameters():
             alpha_params[name].data.sub_(alpha_params[name].grad * 0.01)
             beta_params[name].data.sub_(beta_params[name].grad * 0.01)
-
+            print(name, alpha_params[name].grad)
+            print(name, beta_params[name].grad)
             alpha_params[name].grad.zero_()
             beta_params[name].grad.zero_()
             
