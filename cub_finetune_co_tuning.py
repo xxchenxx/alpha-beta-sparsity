@@ -27,6 +27,7 @@ import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from utils import *
+from utils import train_with_imagenet
 from pruning_utils import check_sparsity,extract_mask,prune_model_custom
 import copy
 import torch.nn.utils.prune as prune
