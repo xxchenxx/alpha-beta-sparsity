@@ -229,7 +229,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                      std=[0.229, 0.224, 0.225])
 
     imagenet_train_dataset = datasets.ImageFolder(
-        traindir,
+        imagenet_traindir,
         transforms.Compose([
             transforms.RandomResizedCrop(224),
             transforms.RandomHorizontalFlip(),
