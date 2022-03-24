@@ -261,7 +261,7 @@ def main_worker(gpu, ngpus_per_node, args):
     criterion = nn.CrossEntropyLoss()
     alpha_params = {}
     beta_params = {}
-    
+    model_device = list(model.parameters())[0].device
     for n, p in model.named_parameters(): 
         alpha = torch.ones_like(p).to(model_device)
         alpha.requires_grad=True
