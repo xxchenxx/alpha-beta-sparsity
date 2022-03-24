@@ -234,7 +234,7 @@ def main_worker(gpu, ngpus_per_node, args):
             transforms.RandomResizedCrop(224),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            normalize,
+            imagenet_normalize,
         ]))
 
     if args.distributed:
@@ -251,7 +251,7 @@ def main_worker(gpu, ngpus_per_node, args):
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
-            normalize,
+            imagenet_normalize,
         ])),
         batch_size=args.imagenet_batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
