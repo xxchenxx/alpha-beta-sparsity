@@ -146,14 +146,32 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
 
         # calculate (a + b)
         model.zero_grad()
+        l1_loss = 0
         for name, p in model.named_parameters():
             alpha_params[name].grad.zero_()
             beta_params[name].grad.zero_()
             p.copy_(backup_params[name]).mul_(alpha_params[name]).mul_(beta_params[name])
-        
+            
+
         output_clean = model(image)
         loss = criterion(output_clean, target)
+        for name, p in model.named_parameters():
+            loss = loss + 0.001 * torch.sum(torch.abs(alpha_params[name] * beta_params[name]))
         output = output_clean.float()
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        for name, p in model.named_parameters():
+            alpha_params[name].data.sub_(alpha_params[name].grad * 0.01)
+            beta_params[name].data.sub_(beta_params[name].grad * 0.01)
+
+            alpha_params[name].grad.zero_()
+            beta_params[name].grad.zero_()
+            
+
+
         loss = loss.float()
         # measure accuracy and record loss
         prec1 = accuracy(output.data, target)[0]
