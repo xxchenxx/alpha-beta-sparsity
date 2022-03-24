@@ -135,7 +135,7 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
 
         for name, p in model.named_parameters():
             backup_params[name] = p.detach().data
-            p.mul_(alpha_params[name])
+            p = p * alpha_params[name])
 
         output_clean = model(imagenet_image)
         loss = criterion(output_clean, imagenet_target)
