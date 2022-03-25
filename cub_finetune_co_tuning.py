@@ -158,7 +158,7 @@ def main_worker(gpu, ngpus_per_node, args):
         checkpoint = torch.load(args.checkpoint,map_location="cpu")
         state_dict = checkpoint['state_dict']
         load_state_dict = {}
-        model.load_state_dict(load_state_dict)
+        model.load_state_dict(state_dict)
 
     model.new_fc = nn.Linear(512, 200)
     from torch.nn import init
