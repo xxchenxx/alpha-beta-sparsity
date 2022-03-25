@@ -321,11 +321,15 @@ def main_worker(gpu, ngpus_per_node, args):
 
         print(optimizer.state_dict()['param_groups'][0]['lr'])
 
-        acc = train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, optimizer, epoch, args, alpha_params, beta_params)
+        acc, alpha_params, beta_params = train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, optimizer, epoch, args, alpha_params, beta_params)
+
+        for key in alpha_params:
+            print(alpha_params[key].mean())
+            print(beta_params[key].mean())
 
         scheduler.step()
         # evaluate on validation set
-        tacc = test_with_imagenet(val_loader, model, criterion, args)
+        tacc = test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_params)
         # evaluate on test set
         all_result['train'].append(acc)
         all_result['ta'].append(tacc)

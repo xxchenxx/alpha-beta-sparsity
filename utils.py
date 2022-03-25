@@ -149,10 +149,9 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
         loss.backward()
         optimizer.step()
 
-        for p in alpha_params.values():
-            p.data = p.data - p.grad.data
-            #print('beta', p.grad.data.abs().mean())
-            p.grad.zero_()
+        for key in alpha_params:
+            alpha_params[key].data = alpha_params[key].data - alpha_params[key].grad.data
+            alpha_params[key].grad.zero_()
 
         # calculate (a + b)
         model.zero_grad()
@@ -172,10 +171,9 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
         loss.backward()
         optimizer.step()
 
-        for p in beta_params.values():
-            p.data = p.data - p.grad.data
-            #print('beta', p.grad.data.abs().mean())
-            p.grad.zero_()
+        for key in beta_params:
+            beta_params[key].data = beta_params[key].data - beta_params[key].grad.data
+            beta_params[key].grad.zero_()
 
         # calculate (a + b)
         model.zero_grad()
@@ -200,7 +198,7 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
 
     print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
 
-    return top1.avg
+    return top1.avg, alpha_params, beta_params
 
 
 def concrete_stretched(alpha, l=0., r = 1.):
@@ -401,7 +399,7 @@ def test(val_loader, model, criterion, args):
     return top1.avg
 
 
-def test_with_imagenet(val_loader, model, criterion, args):
+def test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_params):
     """
     Run evaluation
     """
@@ -410,6 +408,9 @@ def test_with_imagenet(val_loader, model, criterion, args):
 
     # switch to evaluate mode
     model.eval()
+    for name, m in model.named_modules():
+        if isinstance(m, MaskedConv2d):
+            m.set_mask(alpha_params[name], beta_params[name])
 
     for i, (image, target) in enumerate(val_loader):
 
