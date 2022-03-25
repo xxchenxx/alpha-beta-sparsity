@@ -96,7 +96,7 @@ parser.add_argument('--dist-backend', default='nccl', type=str,
 parser.add_argument("--warmup", default=0)
 
 parser.add_argument("--alpha-init", default=5, type=int)
-parser.add_argument("--sparsity-pen", default=5, type=float)
+parser.add_argument("--sparsity-pen", default=1e-9, type=float)
 
 
 def main():

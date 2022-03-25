@@ -144,7 +144,7 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
         loss = criterion(output_clean, imagenet_target)
         for name, m in model.named_modules():
            if isinstance(m, MaskedConv2d):
-                loss = loss + 1e-9 * torch.sum(torch.abs(alpha_params[name]))
+                loss = loss + args.sparsity_pen * torch.sum(torch.abs(alpha_params[name]))
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -166,7 +166,7 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
 
         for name, m in model.named_modules():
            if isinstance(m, MaskedConv2d):
-                loss = loss + 1e-9 * torch.sum(torch.abs(beta_params[name]))
+                loss = loss + args.sparsity_pen * torch.sum(torch.abs(beta_params[name]))
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
