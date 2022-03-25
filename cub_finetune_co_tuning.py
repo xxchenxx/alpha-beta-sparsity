@@ -229,9 +229,9 @@ def main_worker(gpu, ngpus_per_node, args):
 
     
     #imagenet_traindir = os.path.join(args.imagenet_data, 'imagenet-c.x-full','gaussian_noise','3')
-    imagenet_traindir = os.path.join(args.imagenet_train_data, 'train')
+    imagenet_traindir = args.imagenet_train_data
     
-    imagenet_valdir = os.path.join(args.imagenet_val_data, 'val')
+    imagenet_valdir = args.imagenet_val_data
     imagenet_normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
