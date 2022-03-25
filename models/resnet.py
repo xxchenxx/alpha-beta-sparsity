@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from advertorch.utils import NormalizeByChannelMeanStd
 from torchvision.models.utils import load_state_dict_from_url
 
 
@@ -22,15 +21,28 @@ model_urls = {
 }
 
 
+class MaskedConv2d(nn.Conv2d):
+    def set_mask(self, mask, mask2=None):
+        self.mask = mask
+        self.mask2 = mask2
+    def forward(self, input):
+        if self.mask2 is None:
+            weight = self.weight * self.mask
+        else:
+            weight = self.weight * self.mask * self.mask2
+
+        #print(weight)
+        return self._conv_forward(input, weight, self.bias) 
+
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+    return MaskedConv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                     padding=dilation, groups=groups, bias=False, dilation=dilation)
 
 
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+    return MaskedConv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 
 class BasicBlock(nn.Module):
@@ -122,7 +134,7 @@ class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes=10, zero_init_residual=False,
                 groups=1, width_per_group=64, replace_stride_with_dilation=None,
-                norm_layer=None):
+                norm_layer=None, imagenet=True):
         super(ResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
@@ -140,10 +152,16 @@ class ResNet(nn.Module):
         self.groups = groups
         self.base_width = width_per_group
 
-        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn1 = norm_layer(self.inplanes)
-        self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.Identity()
+        if not imagenet:
+            self.conv1 = MaskedConv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
+            self.bn1 = norm_layer(self.inplanes)
+            self.relu = nn.ReLU(inplace=True)
+            self.maxpool = nn.Identity()
+        else:
+            self.conv1 = MaskedConv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+            self.bn1 = nn.BatchNorm2d(self.inplanes)
+            self.relu = nn.ReLU(inplace=True)
+            self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2,
@@ -156,7 +174,7 @@ class ResNet(nn.Module):
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         for m in self.modules():
-            if isinstance(m, nn.Conv2d):
+            if isinstance(m, MaskedConv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
@@ -196,7 +214,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def _forward_impl(self, x):
+    def _forward_impl(self, x, return_representation=False):
 
         # See note [TorchScript super()]
         x = self.conv1(x)
@@ -210,13 +228,15 @@ class ResNet(nn.Module):
         x = self.layer4(x)
 
         x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        x = self.fc(x)
+        rep = torch.flatten(x, 1)
 
-        return x
+        if not return_representation:
+            return self.fc(rep)
+        else:
+            return self.new_fc(rep)
 
-    def forward(self, x):
-        return self._forward_impl(x)
+    def forward(self, x, return_representation=False):
+        return self._forward_impl(x, return_representation)
 
 
 def _resnet(arch, block, layers, pretrained, progress, **kwargs):

@@ -20,14 +20,15 @@ import torch.optim
 import torch.nn as nn
 import torch.utils.data
 import torch.nn.functional as F
-import torchvision.models as models
+#import torchvision.models as models
+from models.resnet import resnet18, MaskedConv2d
 import torch.multiprocessing as mp
 import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from utils import *
-from utils import train_with_imagenet
+from utils import train_with_imagenet, test_with_imagenet
 from pruning_utils import check_sparsity,extract_mask,prune_model_custom
 import copy
 import torch.nn.utils.prune as prune
@@ -151,21 +152,17 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
 
-    model = models.resnet18()
+    model = resnet18(pretrained=True, num_classes=1000, imagenet=True)
     if args.checkpoint and not args.resume:
         print(f"LOAD CHECKPOINT {args.checkpoint}")
         checkpoint = torch.load(args.checkpoint,map_location="cpu")
         state_dict = checkpoint['state_dict']
         load_state_dict = {}
-        for name in state_dict:
-             if name.startswith("module."):
-                   load_state_dict[name[7:]]=state_dict[name]
-             else:
-                   load_state_dict[name] = state_dict[name]
         model.load_state_dict(load_state_dict)
-    model.fc = nn.Linear(512, 200)
+
+    model.new_fc = nn.Linear(512, 200)
     from torch.nn import init
-    init.kaiming_normal_(model.fc.weight.data)
+    init.kaiming_normal_(model.new_fc.weight.data)
     process_group = torch.distributed.new_group(list(range(args.world_size)))
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model, process_group)
 
@@ -181,12 +178,12 @@ def main_worker(gpu, ngpus_per_node, args):
         # ourselves based on the total number of GPUs we have
         args.batch_size = int(args.batch_size / ngpus_per_node)
         args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
     else:
         model.cuda()
         # DistributedDataParallel will divide and allocate batch_size to all
         # available GPUs if device_ids are not set
-        model = torch.nn.parallel.DistributedDataParallel(model)
+        model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
 
     # Data loading code
     initialization = copy.deepcopy(model.module.state_dict())
@@ -225,7 +222,9 @@ def main_worker(gpu, ngpus_per_node, args):
         num_workers=args.workers, pin_memory=True)
 
     
-    imagenet_traindir = os.path.join(args.imagenet_data, 'imagenet-c.x-full','gaussian_noise','3')
+    #imagenet_traindir = os.path.join(args.imagenet_data, 'imagenet-c.x-full','gaussian_noise','3')
+    imagenet_traindir = os.path.join(args.imagenet_data, 'train')
+    
     imagenet_valdir = os.path.join(args.imagenet_data, 'val')
     imagenet_normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
@@ -263,16 +262,15 @@ def main_worker(gpu, ngpus_per_node, args):
     alpha_params = {}
     beta_params = {}
     model_device = list(model.parameters())[0].device
-    for n, p in model.named_parameters(): 
-        alpha = torch.ones_like(p).to(model_device)
-        alpha.requires_grad=True
-        alpha.grad = torch.zeros_like(alpha)
-        alpha_params[n] = alpha
+    for n, m in model.named_modules(): 
+        if isinstance(m, MaskedConv2d): # not pruning fc
+            alpha = nn.Parameter(torch.ones_like(m.weight).to(model_device))
+            alpha.requires_grad=True
+            alpha_params[n] = alpha
 
-        beta = torch.ones_like(p).to(model_device)
-        beta.requires_grad=True
-        beta.grad = torch.zeros_like(beta)
-        beta_params[n] = beta
+            beta = nn.Parameter(torch.ones_like(m.weight).to(model_device))
+            beta.requires_grad=True
+            beta_params[n] = beta
     
 
 
@@ -315,6 +313,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
         start_epoch = 0
         start_state = 0
+        best_sa = 0
     print('######################################## Start Standard Training Iterative Pruning ########################################')
     for epoch in range(start_epoch, args.epochs):
         if args.distributed:
@@ -326,7 +325,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
         scheduler.step()
         # evaluate on validation set
-        tacc = test(val_loader, model, criterion, args)
+        tacc = test_with_imagenet(val_loader, model, criterion, args)
         # evaluate on test set
         all_result['train'].append(acc)
         all_result['ta'].append(tacc)
@@ -339,19 +338,18 @@ def main_worker(gpu, ngpus_per_node, args):
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank % ngpus_per_node == 0):
             save_checkpoint({
-                'state': state,
                 'result': all_result,
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
                 'best_sa': best_sa,
                 'optimizer': optimizer.state_dict(),
-                'scheduler': schedule.state_dict(),
-            }, is_SA_best=is_best_sa, pruning=state, save_path=args.save_dir)
+                'scheduler': scheduler.state_dict(),
+            }, is_SA_best=is_best_sa, pruning=0, save_path=args.save_dir)
 
         plt.plot(all_result['train'], label='train_acc')
         plt.plot(all_result['ta'], label='val_acc')
         plt.legend()
-        plt.savefig(os.path.join(args.save_dir, str(state)+'net_train.png'))
+        plt.savefig(os.path.join(args.save_dir, 'net_train.png'))
         plt.close()
 
     #report result
