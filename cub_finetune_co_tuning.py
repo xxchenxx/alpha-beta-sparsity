@@ -56,7 +56,8 @@ parser = argparse.ArgumentParser(description='PyTorch Iterative Pruning')
 
 ##################################### data setting #################################################
 parser.add_argument('--data', type=str, default='../data', help='location of the data corpus')
-parser.add_argument('--imagenet_data', type=str, default='../data', help='location of the data corpus')
+parser.add_argument('--imagenet_train_data', type=str, default='../data', help='location of the data corpus')
+parser.add_argument('--imagenet_val_data', type=str, default='../data', help='location of the data corpus')
 
 parser.add_argument('--dataset', type=str, default='cifar10', help='dataset[cifar10&100, svhn, fmnist')
 
@@ -73,7 +74,7 @@ parser.add_argument('--save_dir', help='The directory used to save the trained m
 
 ##################################### training setting #################################################
 parser.add_argument('--batch_size', type=int, default=64, help='batch size')
-parser.add_argument('--imagenet_batch_size', type=int, default=1024, help='batch size')
+parser.add_argument('--imagenet_batch_size', type=int, default=256, help='batch size')
 parser.add_argument('--lr', default=1e-3, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--weight_decay', default=1e-4, type=float, help='weight decay')
@@ -96,7 +97,7 @@ parser.add_argument('--dist-backend', default='nccl', type=str,
 parser.add_argument("--warmup", default=0, type=int)
 
 parser.add_argument("--alpha-init", default=5, type=int)
-parser.add_argument("--sparsity-pen", default=5, type=float)
+parser.add_argument("--sparsity-pen", default=1e-9, type=float)
 
 
 def main():
@@ -158,6 +159,11 @@ def main_worker(gpu, ngpus_per_node, args):
         checkpoint = torch.load(args.checkpoint,map_location="cpu")
         state_dict = checkpoint['state_dict']
         load_state_dict = {}
+        for key in state_dict:
+            if key.startswith('module.'):
+                load_state_dict[key[7:]] = state_dict[key]
+            else:
+                load_state_dict[key] = state_dict[key]
         model.load_state_dict(load_state_dict)
 
     model.new_fc = nn.Linear(512, 200)
@@ -226,9 +232,9 @@ def main_worker(gpu, ngpus_per_node, args):
 
     
     #imagenet_traindir = os.path.join(args.imagenet_data, 'imagenet-c.x-full','gaussian_noise','3')
-    imagenet_traindir = os.path.join(args.imagenet_data, 'train')
+    imagenet_traindir = args.imagenet_train_data
     
-    imagenet_valdir = os.path.join(args.imagenet_data, 'val')
+    imagenet_valdir = args.imagenet_val_data
     imagenet_normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
@@ -327,7 +333,7 @@ def main_worker(gpu, ngpus_per_node, args):
         
         scheduler.step()
         # evaluate on validation set
-        tacc = test_with_imagenet(val_loader, model, criterion, args)
+        tacc = test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_params)
         # evaluate on test set
         all_result['train'].append(acc)
         all_result['ta'].append(tacc)

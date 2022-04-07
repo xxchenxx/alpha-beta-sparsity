@@ -125,6 +125,7 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
 
         image = image.cuda()
         target = target.cuda()
+<<<<<<< HEAD
         if False:
             try:
                 imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
@@ -145,6 +146,37 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
             loss.backward()
             optimizer.step()
             model.zero_grad()
+=======
+        try:
+            imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
+        except:
+            imagenet_train_loader_iter = iter(imagenet_train_loader)
+            imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
+        # compute output
+        imagenet_image = imagenet_image.cuda()
+        imagenet_target = imagenet_target.cuda()
+
+        for name, m in model.named_modules():
+           if isinstance(m, MaskedConv2d):
+               m.set_mask(alpha_params[name])
+
+        output_clean = model(imagenet_image)
+        loss = criterion(output_clean, imagenet_target)
+        for name, m in model.named_modules():
+           if isinstance(m, MaskedConv2d):
+                loss = loss + args.sparsity_pen * torch.sum(torch.abs(alpha_params[name]))
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        for key in alpha_params:
+            alpha_params[key].data = alpha_params[key].data - alpha_params[key].grad.data
+            alpha_params[key].grad.zero_()
+
+        # calculate (a + b)
+        model.zero_grad()
+
+>>>>>>> e7534ef51d8be77439869e2082dd5d3065b2eb94
 
         for name, m in model.named_modules():
             if isinstance(m, MaskedConv2d):
@@ -155,7 +187,11 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
 
         for name, m in model.named_modules():
            if isinstance(m, MaskedConv2d):
+<<<<<<< HEAD
                 loss = loss + 1e-5 * torch.sum(torch.abs(m.mask_beta))
+=======
+                loss = loss + args.sparsity_pen * torch.sum(torch.abs(beta_params[name]))
+>>>>>>> e7534ef51d8be77439869e2082dd5d3065b2eb94
         optimizer.zero_grad()
         loss.backward()
         # remove weights grad
@@ -164,7 +200,15 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
                 m.weight.grad = None
                 m.mask_alpha.grad = None
         optimizer.step()
+<<<<<<< HEAD
         
+=======
+
+        for key in beta_params:
+            beta_params[key].data = beta_params[key].data - beta_params[key].grad.data
+            beta_params[key].grad.zero_()
+
+>>>>>>> e7534ef51d8be77439869e2082dd5d3065b2eb94
         # calculate (a + b)
         model.zero_grad()
         loss = loss.float()
@@ -185,6 +229,7 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
 
     print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
 
+<<<<<<< HEAD
     if args.rank == 0:
         for name, p in model.named_parameters():
             if 'mask_alpha' in name or 'mask_beta' in name:
@@ -192,6 +237,9 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
                 
 
     return top1.avg
+=======
+    return top1.avg, alpha_params, beta_params
+>>>>>>> e7534ef51d8be77439869e2082dd5d3065b2eb94
 
 
 def concrete_stretched(alpha, l=0., r = 1.):
@@ -392,7 +440,7 @@ def test(val_loader, model, criterion, args):
     return top1.avg
 
 
-def test_with_imagenet(val_loader, model, criterion, args):
+def test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_params):
     """
     Run evaluation
     """
@@ -403,7 +451,12 @@ def test_with_imagenet(val_loader, model, criterion, args):
     model.eval()
     for name, m in model.named_modules():
         if isinstance(m, MaskedConv2d):
+<<<<<<< HEAD
             m.set_upper()
+=======
+            m.set_mask(alpha_params[name], beta_params[name])
+
+>>>>>>> e7534ef51d8be77439869e2082dd5d3065b2eb94
     for i, (image, target) in enumerate(val_loader):
 
         image = image.cuda()

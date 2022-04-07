@@ -56,7 +56,12 @@ class MaskedConv2d(nn.Conv2d):
             # do upper-level optimization goal
             weight = (self.weight) * self.mask_alpha * self.mask_beta + self.weight_beta * self.mask_beta
 
-        return self._conv_forward(input, weight, self.bias) 
+        #print(weight)
+        if torch.__version__ > "1.7.1":
+            return self._conv_forward(input, weight, self.bias) 
+        else:
+            return self._conv_forward(input, weight) 
+
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
