@@ -84,7 +84,7 @@ parser.add_argument('--world-size', default=1, type=int,
                     help='number of nodes for distributed training')
 parser.add_argument('--rank', default=0, type=int,
                     help='node rank for distributed training')
-parser.add_argument('--dist-url', default='tcp://127.0.0.1:36606', type=str,
+parser.add_argument('--dist-url', default='tcp://127.0.0.1:35506', type=str,
                     help='url used to set up distributed training')
 parser.add_argument('--dist-backend', default='nccl', type=str,
                     help='distributed backend')
@@ -143,7 +143,7 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
 
-    model = models.resnet18()
+    model = models.resnet18(pretrained=True)
     if args.checkpoint and not args.resume:
         print(f"LOAD CHECKPOINT {args.checkpoint}")
         checkpoint = torch.load(args.checkpoint,map_location="cpu")

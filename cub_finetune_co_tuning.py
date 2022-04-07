@@ -89,11 +89,11 @@ parser.add_argument('--world-size', default=1, type=int,
                     help='number of nodes for distributed training')
 parser.add_argument('--rank', default=0, type=int,
                     help='node rank for distributed training')
-parser.add_argument('--dist-url', default='tcp://127.0.0.1:36606', type=str,
+parser.add_argument('--dist-url', default='tcp://127.0.0.1:35505', type=str,
                     help='url used to set up distributed training')
 parser.add_argument('--dist-backend', default='nccl', type=str,
                     help='distributed backend')
-parser.add_argument("--warmup", default=0)
+parser.add_argument("--warmup", default=0, type=int)
 
 parser.add_argument("--alpha-init", default=5, type=int)
 parser.add_argument("--sparsity-pen", default=5, type=float)
@@ -168,7 +168,10 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # init pretrianed weight
     ticket_init_weight = deepcopy(model.state_dict())
-
+    for m in model.modules():
+        if isinstance(m, MaskedConv2d):
+            m.set_incremental_weights()
+            #m.set_lower()
     print('dataparallel mode')
     if args.gpu is not None:
         torch.cuda.set_device(args.gpu)
@@ -178,12 +181,12 @@ def main_worker(gpu, ngpus_per_node, args):
         # ourselves based on the total number of GPUs we have
         args.batch_size = int(args.batch_size / ngpus_per_node)
         args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])#, find_unused_parameters=True)
     else:
         model.cuda()
         # DistributedDataParallel will divide and allocate batch_size to all
         # available GPUs if device_ids are not set
-        model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
+        model = torch.nn.parallel.DistributedDataParallel(model)#, find_unused_parameters=True)
 
     # Data loading code
     initialization = copy.deepcopy(model.module.state_dict())
@@ -245,7 +248,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     imagenet_train_loader = torch.utils.data.DataLoader(
         imagenet_train_dataset, batch_size=args.imagenet_batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+        num_workers=args.workers, pin_memory=True, sampler=imagenet_train_sampler)
 
     imagenet_val_loader = torch.utils.data.DataLoader(
         datasets.ImageFolder(imagenet_valdir, transforms.Compose([
@@ -262,21 +265,19 @@ def main_worker(gpu, ngpus_per_node, args):
     alpha_params = {}
     beta_params = {}
     model_device = list(model.parameters())[0].device
-    for n, m in model.named_modules(): 
-        if isinstance(m, MaskedConv2d): # not pruning fc
-            alpha = nn.Parameter(torch.ones_like(m.weight).to(model_device))
-            alpha.requires_grad=True
-            alpha_params[n] = alpha
 
-            beta = nn.Parameter(torch.ones_like(m.weight).to(model_device))
-            beta.requires_grad=True
-            beta_params[n] = beta
+    optimizer = torch.optim.SGD([
+                {'params': [p for name, p in model.named_parameters() if 'mask' not in name], "lr": args.lr},
+                {'params': [p for name, p in model.named_parameters() if 'mask' in name], "lr": 1, 'weight_decay': 0}
+            ], args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     
+    for m in model.modules():
+        if isinstance(m, MaskedConv2d):
+            # assert m.weight_alpha.requires_grad
+            # assert (m.weight_beta.requires_grad)
+            # assert (not m.weight.requires_grad)
+            pass
 
-
-    optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
     if args.resume:
         if os.path.isfile(args.resume):
@@ -318,11 +319,12 @@ def main_worker(gpu, ngpus_per_node, args):
     for epoch in range(start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
+            imagenet_train_sampler.set_epoch(epoch)
 
         print(optimizer.state_dict()['param_groups'][0]['lr'])
 
-        acc = train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, optimizer, epoch, args, alpha_params, beta_params)
-
+        acc = train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, optimizer, epoch, args)
+        
         scheduler.step()
         # evaluate on validation set
         tacc = test_with_imagenet(val_loader, model, criterion, args)
@@ -344,6 +346,8 @@ def main_worker(gpu, ngpus_per_node, args):
                 'best_sa': best_sa,
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),
+                'alpha': alpha_params,
+                'beta': beta_params
             }, is_SA_best=is_best_sa, pruning=0, save_path=args.save_dir)
 
         plt.plot(all_result['train'], label='train_acc')

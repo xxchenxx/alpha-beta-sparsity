@@ -108,7 +108,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
     return top1.avg
 
-def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, optimizer, epoch, args, alpha_params, beta_params):
+def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, optimizer, epoch, args):
 
     losses = AverageMeter()
     top1 = AverageMeter()
@@ -123,68 +123,53 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
         if epoch < args.warmup:
             warmup_lr(epoch, i+1, optimizer, one_epoch_step=len(train_loader), args=args)
 
-        backup_params = {}
-
         image = image.cuda()
         target = target.cuda()
-        try:
-            imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
-        except:
-            imagenet_train_loader_iter = iter(imagenet_train_loader)
-            imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
-        # compute output
-        imagenet_image = imagenet_image.cuda()
-        imagenet_target = imagenet_target.cuda()
+        if False:
+            try:
+                imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
+            except:
+                imagenet_train_loader_iter = iter(imagenet_train_loader)
+                imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
+            # compute output
+            imagenet_image = imagenet_image.cuda()
+            imagenet_target = imagenet_target.cuda()
+
+            for name, m in model.named_modules():
+                if isinstance(m, MaskedConv2d):
+                    m.set_lower()
+
+            output_clean = model(imagenet_image)
+            loss = criterion(output_clean, imagenet_target)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            model.zero_grad()
+
+        for name, m in model.named_modules():
+            if isinstance(m, MaskedConv2d):
+                m.set_upper()
+
+        output_old, output_new = model(image)
+        loss = criterion(output_new, target) + 0 * output_old.sum()
 
         for name, m in model.named_modules():
            if isinstance(m, MaskedConv2d):
-               m.set_mask(alpha_params[name])
-
-        output_clean = model(imagenet_image)
-        loss = criterion(output_clean, imagenet_target)
-        for name, m in model.named_modules():
-           if isinstance(m, MaskedConv2d):
-                loss = loss + 1e-9 * torch.sum(torch.abs(alpha_params[name]))
+                loss = loss + 1e-5 * torch.sum(torch.abs(m.mask_beta))
         optimizer.zero_grad()
         loss.backward()
+        # remove weights grad
+        for name, m in model.named_modules():
+            if isinstance(m, MaskedConv2d):
+                m.weight.grad = None
+                m.mask_alpha.grad = None
         optimizer.step()
-
-        for p in alpha_params.values():
-            p.data = p.data - p.grad.data
-            #print('beta', p.grad.data.abs().mean())
-            p.grad.zero_()
-
+        
         # calculate (a + b)
         model.zero_grad()
-
-
-        for name, m in model.named_modules():
-           if isinstance(m, MaskedConv2d):
-               m.set_mask(alpha_params[name], beta_params[name])
-
-        output = model(image, return_representation=True)
-        loss = criterion(output, target)
-
-        for name, m in model.named_modules():
-           if isinstance(m, MaskedConv2d):
-                loss = loss + 1e-9 * torch.sum(torch.abs(beta_params[name]))
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        for p in beta_params.values():
-            p.data = p.data - p.grad.data
-            #print('beta', p.grad.data.abs().mean())
-            p.grad.zero_()
-
-        # calculate (a + b)
-        model.zero_grad()
-            
-
-
         loss = loss.float()
         # measure accuracy and record loss
-        prec1 = accuracy(output.data, target)[0]
+        prec1 = accuracy(output_new.data, target)[0]
 
         losses.update(loss.item(), image.size(0))
         top1.update(prec1.item(), image.size(0))
@@ -199,6 +184,12 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
             start = time.time()
 
     print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
+
+    if args.rank == 0:
+        for name, p in model.named_parameters():
+            if 'mask_alpha' in name or 'mask_beta' in name:
+                print(name, p.data.abs().mean())
+                
 
     return top1.avg
 
@@ -410,7 +401,9 @@ def test_with_imagenet(val_loader, model, criterion, args):
 
     # switch to evaluate mode
     model.eval()
-
+    for name, m in model.named_modules():
+        if isinstance(m, MaskedConv2d):
+            m.set_upper()
     for i, (image, target) in enumerate(val_loader):
 
         image = image.cuda()
@@ -418,7 +411,7 @@ def test_with_imagenet(val_loader, model, criterion, args):
 
         # compute output
         with torch.no_grad():
-            output = model(image, return_representation=True)
+            _, output = model(image)
             loss = criterion(output, target)
 
         output = output.float()
@@ -542,3 +535,4 @@ def setup_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
     torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False

@@ -1,7 +1,12 @@
 import torch
 import torch.nn as nn
-from torchvision.models.utils import load_state_dict_from_url
-
+from torch import Tensor
+from typing import Optional
+try:
+    from torchvision.models.utils import load_state_dict_from_url
+except:
+    from torch.hub import load_state_dict_from_url
+    
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
         'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
@@ -22,16 +27,35 @@ model_urls = {
 
 
 class MaskedConv2d(nn.Conv2d):
-    def set_mask(self, mask, mask2=None):
-        self.mask = mask
-        self.mask2 = mask2
-    def forward(self, input):
-        if self.mask2 is None:
-            weight = self.weight * self.mask
-        else:
-            weight = self.weight * self.mask * self.mask2
+    def set_incremental_weights(self) -> None:
+        self.register_parameter('weight_beta', torch.nn.Parameter(torch.zeros_like(self.weight.data)))
+        self.register_parameter('mask_alpha', torch.nn.Parameter(torch.ones_like(self.weight.data)))
+        self.register_parameter('mask_beta', torch.nn.Parameter(torch.ones_like(self.weight.data)))
+        self.weight.requires_grad = True
+        self.mode = 'lower'
+    
+    def set_lower(self) -> None:
+        self.weight.requires_grad = True
+        self.weight_beta.requires_grad = True
+        self.mask_alpha.requires_grad = True
+        self.mask_beta.requires_grad = True
+        self.mode = 'lower'
+    
+    def set_upper(self) -> None:
+        self.weight.requires_grad = True
+        self.weight_beta.requires_grad = True
+        self.mask_alpha.requires_grad = True
+        self.mask_beta.requires_grad = True
+        self.mode = 'upper'
 
-        #print(weight)
+    def forward(self, input):
+        if self.mode == 'lower': 
+            # do lower-level optimization goal
+            weight = (self.weight) * self.mask_alpha + 0 * self.weight_beta * self.mask_beta
+        else:
+            # do upper-level optimization goal
+            weight = (self.weight) * self.mask_alpha * self.mask_beta + self.weight_beta * self.mask_beta
+
         return self._conv_forward(input, weight, self.bias) 
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
@@ -214,7 +238,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def _forward_impl(self, x, return_representation=False):
+    def _forward_impl(self, x):
 
         # See note [TorchScript super()]
         x = self.conv1(x)
@@ -230,13 +254,10 @@ class ResNet(nn.Module):
         x = self.avgpool(x)
         rep = torch.flatten(x, 1)
 
-        if not return_representation:
-            return self.fc(rep)
-        else:
-            return self.new_fc(rep)
+        return self.fc(rep), self.new_fc(rep)
 
-    def forward(self, x, return_representation=False):
-        return self._forward_impl(x, return_representation)
+    def forward(self, x):
+        return self._forward_impl(x)
 
 
 def _resnet(arch, block, layers, pretrained, progress, **kwargs):
