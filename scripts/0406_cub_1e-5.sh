@@ -1,0 +1,15 @@
+# LSBATCH: User input
+#!/bin/bash
+###LSf Syntax
+#BSUB -nnodes 1
+#BSUB -W 720
+#BSUB -G heas
+#BSUB -e cub_co_tuning_1e-5_beta_only.txt
+#BSUB -o cub_co_tuning_1e-5_beta_only.txt
+#BSUB -J cub_co_tuning_1e-5_beta_only
+#BSUB -q pbatch
+cd /usr/workspace/olivare/
+source opence/bin/activate
+cd /g/g20/olivare/CV_LTH_Pre-training_copy3/
+ 
+CUDA_VISIBLE_DEVICES=0,1,2,3 python -u cub_finetune_co_tuning.py --imagenet_data /usr/workspace/RML-data/data/ --data /usr/workspace/RML-data/data/cub/ --rate 0.2 --save_dir /usr/workspace/olivare/cub_co_tuning_1e-5_beta_only --epoch 95 --worker 4 --checkpoint /usr/workspace/olivare/imagenetc_imp/0checkpoint.pth.tar

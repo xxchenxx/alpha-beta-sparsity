@@ -184,7 +184,6 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
 
     print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
 
-<<<<<<< HEAD
     if args.rank == 0:
         for name, p in model.named_parameters():
             if 'mask_alpha' in name or 'mask_beta' in name:
@@ -192,9 +191,6 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
                 
 
     return top1.avg
-=======
-    return top1.avg, alpha_params, beta_params
->>>>>>> e7534ef51d8be77439869e2082dd5d3065b2eb94
 
 
 def concrete_stretched(alpha, l=0., r = 1.):
@@ -406,12 +402,7 @@ def test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_pa
     model.eval()
     for name, m in model.named_modules():
         if isinstance(m, MaskedConv2d):
-<<<<<<< HEAD
             m.set_upper()
-=======
-            m.set_mask(alpha_params[name], beta_params[name])
-
->>>>>>> e7534ef51d8be77439869e2082dd5d3065b2eb94
     for i, (image, target) in enumerate(val_loader):
 
         image = image.cuda()
