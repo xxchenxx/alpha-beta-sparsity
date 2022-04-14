@@ -187,11 +187,105 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
     if args.rank == 0:
         for name, p in model.named_parameters():
             if 'mask_alpha' in name or 'mask_beta' in name:
-                print(name, p.data.abs().mean())
+                print(name, (p.data.abs() ** 5).mean())
                 
 
     return top1.avg
 
+
+def train_with_imagenet_gdp(train_loader, imagenet_train_loader, model, criterion, optimizer, epoch, args):
+
+    losses = AverageMeter()
+    top1 = AverageMeter()
+
+    # switch to train mode
+    model.train()
+
+    start = time.time()
+    imagenet_train_loader_iter = iter(imagenet_train_loader)
+    for name, m in model.named_modules():
+            if isinstance(m, MaskedConv2d):
+                m.epsilon *= 0.97
+    for i, (image, target) in enumerate(train_loader):
+
+        if epoch < args.warmup:
+            warmup_lr(epoch, i+1, optimizer, one_epoch_step=len(train_loader), args=args)
+
+        image = image.cuda()
+        target = target.cuda()
+        if False:
+            try:
+                imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
+            except:
+                imagenet_train_loader_iter = iter(imagenet_train_loader)
+                imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
+            # compute output
+            imagenet_image = imagenet_image.cuda()
+            imagenet_target = imagenet_target.cuda()
+
+            for name, m in model.named_modules():
+                if isinstance(m, MaskedConv2d):
+                    m.set_lower()
+
+            output_clean = model(imagenet_image)
+            loss = criterion(output_clean, imagenet_target)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            model.zero_grad()
+
+        for name, m in model.named_modules():
+            if isinstance(m, MaskedConv2d):
+                m.set_upper()
+
+        output_old, output_new = model(image)
+        loss = criterion(output_new, target) + 0 * output_old.sum()
+        optimizer.zero_grad()
+        loss.backward()
+        # remove weights grad
+        for name, m in model.named_modules():
+            if isinstance(m, MaskedConv2d):
+                m.weight.grad = None
+                m.mask_alpha.grad = None
+                # print(name, m.mask_beta.grad.abs().mean())
+        optimizer.step()
+        # calculate (a + b)
+        model.zero_grad()
+        loss = loss.float()
+        for name, m in model.named_modules():
+           if isinstance(m, MaskedConv2d):
+                beta = m.mask_beta.data.detach().clone()
+                #print(beta.data.abs().mean())
+                m1 = beta >= 8e-4
+                m2 = beta <= -8e-4
+                m3 = (-8e-4 < beta) * (beta < 8e-4)
+                m.mask_beta.data[m1] = m.mask_beta.data[m1] - 8e-4
+                m.mask_beta.data[m2] = m.mask_beta.data[m2] + 8e-4
+                m.mask_beta.data[m3] = 0
+        # measure accuracy and record loss
+        prec1 = accuracy(output_new.data, target)[0]
+
+        losses.update(loss.item(), image.size(0))
+        top1.update(prec1.item(), image.size(0))
+
+        if i % args.print_freq == 0:
+            end = time.time()
+            print('Epoch: [{0}][{1}/{2}]\t'
+                'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                'Accuracy {top1.val:.3f} ({top1.avg:.3f})\t'
+                'Time {3:.2f}'.format(
+                    epoch, i, len(train_loader), end-start, loss=losses, top1=top1))
+            start = time.time()
+
+    print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
+
+    if args.rank == 0:
+        for name, p in model.named_parameters():
+            if 'mask_alpha' in name or 'mask_beta' in name:
+                print(name, (p.data.abs() ** 5).mean())
+                
+
+    return top1.avg
 
 def concrete_stretched(alpha, l=0., r = 1.):
     u = torch.zeros_like(alpha).uniform_().clamp_(0.0001, 0.9999)

@@ -33,6 +33,7 @@ class MaskedConv2d(nn.Conv2d):
         self.register_parameter('mask_beta', torch.nn.Parameter(torch.ones_like(self.weight.data)))
         self.weight.requires_grad = True
         self.mode = 'lower'
+        self.epsilon = 0.1
     
     def set_lower(self) -> None:
         self.weight.requires_grad = True
@@ -51,10 +52,10 @@ class MaskedConv2d(nn.Conv2d):
     def forward(self, input):
         if self.mode == 'lower': 
             # do lower-level optimization goal
-            weight = (self.weight) * self.mask_alpha + 0 * self.weight_beta * self.mask_beta
+            weight = (self.weight) * self.mask_alpha + 0 * self.weight_beta * (self.mask_beta ** 2) / (self.mask_beta ** 2 + self.epsilon)
         else:
             # do upper-level optimization goal
-            weight = (self.weight) * self.mask_alpha * self.mask_beta + self.weight_beta * self.mask_beta
+            weight = (self.weight) * self.mask_alpha * (self.mask_beta ** 2) / (self.mask_beta ** 2 + self.epsilon) + self.weight_beta * (self.mask_beta ** 2) / (self.mask_beta ** 2 + self.epsilon)
 
         #print(weight)
         if torch.__version__ > "1.7.1":
