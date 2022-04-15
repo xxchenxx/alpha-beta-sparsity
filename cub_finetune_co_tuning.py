@@ -237,7 +237,7 @@ def main_worker(gpu, ngpus_per_node, args):
     imagenet_valdir = args.imagenet_val_data
     imagenet_normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
-
+    '''
     imagenet_train_dataset = datasets.ImageFolder(
         imagenet_traindir,
         transforms.Compose([
@@ -266,7 +266,9 @@ def main_worker(gpu, ngpus_per_node, args):
         batch_size=args.imagenet_batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
-
+    '''
+    imagenet_train_sampler = None
+    imagenet_train_loader = None
     criterion = nn.CrossEntropyLoss()
     alpha_params = {}
     beta_params = {}
@@ -325,7 +327,7 @@ def main_worker(gpu, ngpus_per_node, args):
     for epoch in range(start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
-            imagenet_train_sampler.set_epoch(epoch)
+            # imagenet_train_sampler.set_epoch(epoch)
 
         print(optimizer.state_dict()['param_groups'][0]['lr'])
 

@@ -202,7 +202,7 @@ def train_with_imagenet_gdp(train_loader, imagenet_train_loader, model, criterio
     model.train()
 
     start = time.time()
-    imagenet_train_loader_iter = iter(imagenet_train_loader)
+    # imagenet_train_loader_iter = iter(imagenet_train_loader)
     for name, m in model.named_modules():
             if isinstance(m, MaskedConv2d):
                 m.epsilon *= 0.97
@@ -256,11 +256,11 @@ def train_with_imagenet_gdp(train_loader, imagenet_train_loader, model, criterio
            if isinstance(m, MaskedConv2d):
                 beta = m.mask_beta.data.detach().clone()
                 #print(beta.data.abs().mean())
-                m1 = beta >= 8e-4
-                m2 = beta <= -8e-4
-                m3 = (-8e-4 < beta) * (beta < 8e-4)
-                m.mask_beta.data[m1] = m.mask_beta.data[m1] - 8e-4
-                m.mask_beta.data[m2] = m.mask_beta.data[m2] + 8e-4
+                m1 = beta >= 7e-4
+                m2 = beta <= -7e-4
+                m3 = (-7e-4 < beta) * (beta < 7e-4)
+                m.mask_beta.data[m1] = m.mask_beta.data[m1] - 7e-4
+                m.mask_beta.data[m2] = m.mask_beta.data[m2] + 7e-4
                 m.mask_beta.data[m3] = 0
         # measure accuracy and record loss
         prec1 = accuracy(output_new.data, target)[0]

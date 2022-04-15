@@ -232,6 +232,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     
     #imagenet_traindir = os.path.join(args.imagenet_data, 'imagenet-c.x-full','gaussian_noise','3')
+    '''
     imagenet_traindir = args.imagenet_train_data
     
     imagenet_valdir = args.imagenet_val_data
@@ -266,7 +267,8 @@ def main_worker(gpu, ngpus_per_node, args):
         batch_size=args.imagenet_batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
-
+    '''
+    imagenet_train_loader = None
     criterion = nn.CrossEntropyLoss()
     alpha_params = {}
     beta_params = {}
@@ -325,7 +327,7 @@ def main_worker(gpu, ngpus_per_node, args):
     for epoch in range(start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
-            imagenet_train_sampler.set_epoch(epoch)
+            # imagenet_train_sampler.set_epoch(epoch)
 
         print(optimizer.state_dict()['param_groups'][0]['lr'])
 
