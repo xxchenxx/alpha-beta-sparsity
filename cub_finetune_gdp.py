@@ -99,7 +99,7 @@ parser.add_argument("--warmup", default=0, type=int)
 parser.add_argument("--alpha-init", default=5, type=int)
 parser.add_argument("--sparsity-pen", default=1e-9, type=float)
 parser.add_argument('--l1-reg-beta', type=float, default=1e-6)
-parser.add_argument('--reg-lr', type=int, default=10)
+parser.add_argument('--reg-lr', type=float, default=10)
 parser.add_argument('--lamb', type=float, default=1)
 
 
