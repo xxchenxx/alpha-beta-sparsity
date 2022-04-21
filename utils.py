@@ -205,7 +205,7 @@ def train_with_imagenet_gdp(train_loader, imagenet_train_loader, model, criterio
     # imagenet_train_loader_iter = iter(imagenet_train_loader)
     for name, m in model.named_modules():
             if isinstance(m, MaskedConv2d):
-                m.epsilon *= 0.97
+                m.epsilon *= 0.9
     for i, (image, target) in enumerate(train_loader):
 
         if epoch < args.warmup:
@@ -255,12 +255,13 @@ def train_with_imagenet_gdp(train_loader, imagenet_train_loader, model, criterio
         for name, m in model.named_modules():
            if isinstance(m, MaskedConv2d):
                 beta = m.mask_beta.data.detach().clone()
+                lr = optimizer.param_groups[1]['lr']
                 #print(beta.data.abs().mean())
-                m1 = beta >= 7e-4
-                m2 = beta <= -7e-4
-                m3 = (-7e-4 < beta) * (beta < 7e-4)
-                m.mask_beta.data[m1] = m.mask_beta.data[m1] - 7e-4
-                m.mask_beta.data[m2] = m.mask_beta.data[m2] + 7e-4
+                m1 = beta >= lr * args.lamb
+                m2 = beta <= -lr * args.lamb
+                m3 = (beta.abs() < lr * args.lamb)
+                m.mask_beta.data[m1] = m.mask_beta.data[m1] - lr * args.lamb
+                m.mask_beta.data[m2] = m.mask_beta.data[m2] + lr * args.lamb
                 m.mask_beta.data[m3] = 0
         # measure accuracy and record loss
         prec1 = accuracy(output_new.data, target)[0]
@@ -282,165 +283,8 @@ def train_with_imagenet_gdp(train_loader, imagenet_train_loader, model, criterio
     if args.rank == 0:
         for name, p in model.named_parameters():
             if 'mask_alpha' in name or 'mask_beta' in name:
-                print(name, (p.data.abs() ** 5).mean())
+                print(name, (p.data.abs()).mean())
                 
-
-    return top1.avg
-
-def concrete_stretched(alpha, l=0., r = 1.):
-    u = torch.zeros_like(alpha).uniform_().clamp_(0.0001, 0.9999)
-    s = (torch.sigmoid(u.log() - (1-u).log() + alpha)).detach()
-    u = s*(r-l) + l
-    t = u.clamp(0, 1000)
-    z = t.clamp(-1000, 1)
-    dz_dt = (t < 1).float().to(alpha.device).detach()
-    dt_du = (u > 0).float().to(alpha.device).detach()
-    du_ds = r - l
-    ds_dalpha = (s*(1-s)).detach()
-    dz_dalpha = dz_dt*dt_du*du_ds*ds_dalpha
-    return z.detach(), dz_dalpha.detach()
-
-def train_co(train_loader, imagenet_train_loader, model, criterion, optimizer, epoch, args,  model_params):
-
-    losses = AverageMeter()
-    top1 = AverageMeter()
-    per_params_z = {}
-    per_params_z_grad = {}
-    # switch to train mode
-    
-    log_ratio = np.log(-args.concrete_lower / args.concrete_upper)
-    start = time.time()
-    for n, p in model.named_parameters():
-        if n not in model_params:
-            print(" n not in model_params")
-            embed()
-        assert(n in model_params)
-        if "fc" in n:
-            nonzero_params += p.numel()
-            p.data.copy_(model_params[n][0].data + model_params[n][1].data)
-        else:
-            if args.per_params_alpha == 1:
-                params_z, params_z_grad = concrete_stretched(per_params_alpha[n], args.concrete_lower,
-                        args.concrete_upper)
-                per_params_z[n] = params_z
-                per_params_z_grad[n] = params_z_grad
-
-            z, z_grad = concrete_stretched(model_params[n][2], args.concrete_lower, args.concrete_upper)
-            
-            ind = 0
-            l0_pen[ind] += torch.sigmoid(model_params[n][2] - log_ratio).sum()
-            l0_pen_sum += torch.sigmoid(model_params[n][2] - log_ratio).sum()
-            
-            z2 =  per_params_z[n]
-
-            grad_params[n] = [model_params[n][1] * z2, z * z2, z_grad, model_params[n][1] * z]
-
-            if args.per_params_alpha == 1:
-                l0_pen[ind] += torch.sigmoid(per_params_alpha[n] - log_ratio).sum()
-        
-            p.data.copy_(model_params[n][0].data + (z2*z).data*model_params[n][1].data)
-            nonzero_params += ((z2*z)>0).float().detach().sum().item()
-
-    model.train()
-
-    for i, (image, target) in enumerate(train_loader):
-
-        if epoch < args.warmup:
-            warmup_lr(epoch, i+1, optimizer, one_epoch_step=len(train_loader), args=args)
-
-        image = image.cuda()
-        target = target.cuda()
-
-        # compute output
-        output_clean = model(image)
-        loss = criterion(output_clean, target)
-
-        optimizer.zero_grad()
-        loss.backward()
-
-        for n, p in model.named_parameters():
-                if p.grad is None:
-                    continue
-                if "classifier" in n:
-                    bert_params[n][1].grad.copy_(p.grad.data)
-                else:
-                    try:
-                        bert_params[n][1].grad.copy_(p.grad.data * grad_params[n][1].data)
-                    except:
-                        embed()
-                    bert_params[n][2].grad.copy_(p.grad.data * grad_params[n][0].data *
-                                                 grad_params[n][2].data)
-                
-                    if args.per_params_alpha == 1:
-                        per_params_alpha[n].grad.copy_(torch.sum(p.grad.data * grad_params[n][3].data * 
-                                per_params_z_grad[n].data))
-                    if args.per_layer_alpha == 1:
-                        per_layer_alpha.grad[get_layer_ind(n)] += torch.sum(p.grad.data * grad_params[n][3].data *
-                                per_layer_z_grad[ind].data)
-
-                sum_l0_pen = 0
-                for i in range(total_layers):
-                    if l0_pen[i] != 0:
-                        sum_l0_pen += (sparsity_pen[i] * l0_pen[i]).sum()
-                sum_l0_pen.sum().backward()
-
-                if args.fp16:
-                    torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
-                else:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-                torch.nn.utils.clip_grad_norm_(finetune_params, args.max_grad_norm)
-                torch.nn.utils.clip_grad_norm_(alpha_params, args.max_grad_norm)
-                optimizer.step()
-                alpha_optimizer.step()
-                scheduler.step()  # Update learning rate schedule
-                model.zero_grad()
-                params_norm = [0, 0, 0, 0, 0, 0]
-                exp_z = 0
-                for n, p in bert_params.items():
-                    params_norm[0] += p[2].sum().item()
-                    params_norm[1] += p[2].norm().item()**2
-                    params_norm[2] += p[2].grad.norm().item()**2
-                    params_norm[3] += torch.sigmoid(p[2]).sum().item()
-                    params_norm[4] += p[2].numel()
-                    # params_norm[5] += (grad_params[n][1] > 0).float().sum().item()
-                    if args.per_params_alpha == 1:
-                        exp_z += (torch.sigmoid(p[2]).sum() * torch.sigmoid(per_params_alpha[n])).item()
-                    else:
-                        exp_z += torch.sigmoid(p[2]).sum().item()
-
-                    p[1].grad.zero_()
-                    p[2].grad.zero_()
-
-                mean_exp_z = exp_z / params_norm[4]
-
-                    
-                if args.per_layer_alpha == 1:
-                    per_layer_alpha.grad.zero_()
-                if args.per_params_alpha == 1:
-                    for n,p in per_params_alpha.items():
-                        p.grad.zero_()
-
-
-        optimizer.step()
-
-        output = output_clean.float()
-        loss = loss.float()
-        # measure accuracy and record loss
-        prec1 = accuracy(output.data, target)[0]
-
-        losses.update(loss.item(), image.size(0))
-        top1.update(prec1.item(), image.size(0))
-
-        if i % args.print_freq == 0:
-            end = time.time()
-            print('Epoch: [{0}][{1}/{2}]\t'
-                'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                'Accuracy {top1.val:.3f} ({top1.avg:.3f})\t'
-                'Time {3:.2f}'.format(
-                    epoch, i, len(train_loader), end-start, loss=losses, top1=top1))
-            start = time.time()
-
-    print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
 
     return top1.avg
 

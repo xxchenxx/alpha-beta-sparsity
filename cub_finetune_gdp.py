@@ -99,6 +99,9 @@ parser.add_argument("--warmup", default=0, type=int)
 parser.add_argument("--alpha-init", default=5, type=int)
 parser.add_argument("--sparsity-pen", default=1e-9, type=float)
 parser.add_argument('--l1-reg-beta', type=float, default=1e-6)
+parser.add_argument('--reg-lr', type=int, default=10)
+parser.add_argument('--lamb', type=float, default=1)
+
 
 def main():
     best_sa = 0
@@ -232,7 +235,6 @@ def main_worker(gpu, ngpus_per_node, args):
 
     
     #imagenet_traindir = os.path.join(args.imagenet_data, 'imagenet-c.x-full','gaussian_noise','3')
-    '''
     imagenet_traindir = args.imagenet_train_data
     
     imagenet_valdir = args.imagenet_val_data
@@ -267,8 +269,7 @@ def main_worker(gpu, ngpus_per_node, args):
         batch_size=args.imagenet_batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
-    '''
-    imagenet_train_loader = None
+    # imagenet_train_loader = None
     criterion = nn.CrossEntropyLoss()
     alpha_params = {}
     beta_params = {}
@@ -276,7 +277,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     optimizer = torch.optim.SGD([
                 {'params': [p for name, p in model.named_parameters() if 'mask' not in name], "lr": args.lr},
-                {'params': [p for name, p in model.named_parameters() if 'mask' in name], "lr": 1, 'weight_decay': 0}
+                {'params': [p for name, p in model.named_parameters() if 'mask' in name], "lr": args.lr / args.reg_lr, 'weight_decay': 0}
             ], args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     
     for m in model.modules():
@@ -327,7 +328,7 @@ def main_worker(gpu, ngpus_per_node, args):
     for epoch in range(start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
-            # imagenet_train_sampler.set_epoch(epoch)
+            imagenet_train_sampler.set_epoch(epoch)
 
         print(optimizer.state_dict()['param_groups'][0]['lr'])
 
@@ -340,6 +341,7 @@ def main_worker(gpu, ngpus_per_node, args):
         all_result['train'].append(acc)
         all_result['ta'].append(tacc)
 
+        torch.save(model.state_dict(), os.path.join(args.save_dir, f"model_{epoch}.pth.tar"))
 
         # remember best prec@1 and save checkpoint
         is_best_sa = tacc  > best_sa
