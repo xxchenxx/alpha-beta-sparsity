@@ -74,7 +74,7 @@ parser.add_argument('--save_dir', help='The directory used to save the trained m
 
 ##################################### training setting #################################################
 parser.add_argument('--batch_size', type=int, default=64, help='batch size')
-parser.add_argument('--imagenet_batch_size', type=int, default=256, help='batch size')
+parser.add_argument('--imagenet_batch_size', type=int, default=64, help='batch size')
 parser.add_argument('--lr', default=1e-3, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--weight_decay', default=1e-4, type=float, help='weight decay')
@@ -277,8 +277,8 @@ def main_worker(gpu, ngpus_per_node, args):
 
     optimizer = torch.optim.SGD([
                 {'params': [p for name, p in model.named_parameters() if 'mask' not in name], "lr": args.lr},
-                {'params': [p for name, p in model.named_parameters() if 'mask' in name], "lr": args.lr / args.reg_lr, 'weight_decay': 0}
-            ], args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+                {'params': [p for name, p in model.named_parameters() if 'mask' in name], "lr": args.reg_lr, 'weight_decay': 0}
+            ], momentum=args.momentum)
     
     for m in model.modules():
         if isinstance(m, MaskedConv2d):

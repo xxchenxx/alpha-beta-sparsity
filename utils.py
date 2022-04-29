@@ -213,26 +213,27 @@ def train_with_imagenet_gdp(train_loader, imagenet_train_loader, model, criterio
 
         image = image.cuda()
         target = target.cuda()
-        if False:
-            try:
-                imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
-            except:
-                imagenet_train_loader_iter = iter(imagenet_train_loader)
-                imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
-            # compute output
-            imagenet_image = imagenet_image.cuda()
-            imagenet_target = imagenet_target.cuda()
+        for name, m in model.named_modules():
+            if isinstance(m, MaskedConv2d):
+                m.set_lower()
+        if i == 0 and epoch == 0:
+            for j in range(0):
+                try:
+                    imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
+                except:
+                    imagenet_train_loader_iter = iter(imagenet_train_loader)
+                    imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
+                # compute output
+                imagenet_image = imagenet_image.cuda()
+                imagenet_target = imagenet_target.cuda()
 
-            for name, m in model.named_modules():
-                if isinstance(m, MaskedConv2d):
-                    m.set_lower()
-
-            output_clean = model(imagenet_image)
-            loss = criterion(output_clean, imagenet_target)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            model.zero_grad()
+                output_old, output_new = model(image)
+                loss = criterion(output_old, target) + 0 * output_new.sum()
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                model.zero_grad()
+            torch.save( model.state_dict(), "tuned.pth")
 
         for name, m in model.named_modules():
             if isinstance(m, MaskedConv2d):
@@ -245,9 +246,9 @@ def train_with_imagenet_gdp(train_loader, imagenet_train_loader, model, criterio
         # remove weights grad
         for name, m in model.named_modules():
             if isinstance(m, MaskedConv2d):
-                m.weight.grad = None
                 m.mask_alpha.grad = None
                 # print(name, m.mask_beta.grad.abs().mean())
+                # print(m.mask_beta.grad.data.abs().mean())
         optimizer.step()
         # calculate (a + b)
         model.zero_grad()
@@ -256,6 +257,7 @@ def train_with_imagenet_gdp(train_loader, imagenet_train_loader, model, criterio
            if isinstance(m, MaskedConv2d):
                 beta = m.mask_beta.data.detach().clone()
                 lr = optimizer.param_groups[1]['lr']
+                # print(lr * args.lamb)
                 #print(beta.data.abs().mean())
                 m1 = beta >= lr * args.lamb
                 m2 = beta <= -lr * args.lamb
@@ -341,6 +343,7 @@ def test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_pa
     for name, m in model.named_modules():
         if isinstance(m, MaskedConv2d):
             m.set_upper()
+            # print(m.mask_beta)
     for i, (image, target) in enumerate(val_loader):
 
         image = image.cuda()
