@@ -128,7 +128,7 @@ def main():
     args.multiprocessing_distributed=True
 
     ngpus_per_node = torch.cuda.device_count()
-    if True:
+    if False:
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
         args.world_size = ngpus_per_node * args.world_size
@@ -147,6 +147,7 @@ def main_worker(gpu, ngpus_per_node, args):
         print("Use GPU: {} for training".format(args.gpu))
 
     # create model
+    '''
     if args.distributed:
         if args.dist_url == "env://" and args.rank == -1:
             args.rank = int(os.environ["RANK"])
@@ -156,6 +157,7 @@ def main_worker(gpu, ngpus_per_node, args):
             args.rank = args.rank * ngpus_per_node + gpu
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
+    '''
 
     model = resnet18(pretrained=True, num_classes=1000, imagenet=True)
     if args.checkpoint and not args.resume:
@@ -173,10 +175,10 @@ def main_worker(gpu, ngpus_per_node, args):
     model.new_fc = nn.Linear(512, 200)
     from torch.nn import init
     init.kaiming_normal_(model.new_fc.weight.data)
-    process_group = torch.distributed.new_group(list(range(args.world_size)))
+    # process_group = torch.distributed.new_group(list(range(args.world_size)))
     model_lower = copy.deepcopy(model)
-    model = nn.SyncBatchNorm.convert_sync_batchnorm(model, process_group)
-    model_lower = nn.SyncBatchNorm.convert_sync_batchnorm(model_lower, process_group)
+    # model = nn.SyncBatchNorm.convert_sync_batchnorm(model, process_group)
+    # model_lower = nn.SyncBatchNorm.convert_sync_batchnorm(model_lower, process_group)
 
     # init pretrianed weight
     for m in model.modules():
@@ -198,16 +200,16 @@ def main_worker(gpu, ngpus_per_node, args):
         # ourselves based on the total number of GPUs we have
         args.batch_size = int(args.batch_size / ngpus_per_node)
         args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])#, find_unused_parameters=True)
-        model_lower = torch.nn.parallel.DistributedDataParallel(model_lower, device_ids=[args.gpu])#, find_unused_parameters=True)
+        model = torch.nn.DataParallel(model, device_ids=[args.gpu])#, find_unused_parameters=True)
+        model_lower = torch.nn.DataParallel(model_lower, device_ids=[args.gpu])#, find_unused_parameters=True)
 
     else:
         model.cuda()
         model_lower.cuda(args.gpu)
         # DistributedDataParallel will divide and allocate batch_size to all
         # available GPUs if device_ids are not set
-        model = torch.nn.parallel.DistributedDataParallel(model)#, find_unused_parameters=True)
-        model_lower = torch.nn.parallel.DistributedDataParallel(model_lower)#, find_unused_parameters=True)
+        model = torch.nn.DataParallel(model)#, find_unused_parameters=True)
+        model_lower = torch.nn.DataParallel(model_lower)#, find_unused_parameters=True)
         
     # Data loading code
     initialization = copy.deepcopy(model.module.state_dict())
@@ -231,10 +233,7 @@ def main_worker(gpu, ngpus_per_node, args):
     train_dataset = cub200(args.data, True, transforms.Compose(train_transform_list))
     val_dataset = cub200(args.data, False, transforms.Compose(test_transforms_list))
 
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-    else:
-        train_sampler = None
+    train_sampler = None
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=False,
@@ -262,10 +261,7 @@ def main_worker(gpu, ngpus_per_node, args):
             imagenet_normalize,
         ]))
 
-    if args.distributed:
-        imagenet_train_sampler = torch.utils.data.distributed.DistributedSampler(imagenet_train_dataset)
-    else:
-        imagenet_train_sampler = None
+    imagenet_train_sampler = None
 
     imagenet_train_loader = torch.utils.data.DataLoader(
         imagenet_train_dataset, batch_size=args.imagenet_batch_size, shuffle=False,
@@ -338,9 +334,6 @@ def main_worker(gpu, ngpus_per_node, args):
         best_sa = 0
     print('######################################## Start Standard Training Iterative Pruning ########################################')
     for epoch in range(start_epoch, args.epochs):
-        if args.distributed:
-            train_sampler.set_epoch(epoch)
-            imagenet_train_sampler.set_epoch(epoch)
 
         print(optimizer.state_dict()['param_groups'][0]['lr'])
 
