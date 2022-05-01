@@ -127,7 +127,7 @@ def main():
     args.distributed = True
     args.multiprocessing_distributed=True
 
-    ngpus_per_node = torch.cuda.device_count()
+    # ngpus_per_node = torch.cuda.device_count()
     if False:
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
@@ -137,7 +137,7 @@ def main():
         mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
     else:
         # Simply call main_worker function
-        main_worker(args.gpu, ngpus_per_node, args)
+        main_worker(args.gpu, 1, args)
 
 def main_worker(gpu, ngpus_per_node, args):
     global best_acc1
@@ -200,12 +200,12 @@ def main_worker(gpu, ngpus_per_node, args):
         # ourselves based on the total number of GPUs we have
         args.batch_size = int(args.batch_size / ngpus_per_node)
         args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-        model = torch.nn.DataParallel(model, device_ids=[args.gpu])#, find_unused_parameters=True)
-        model_lower = torch.nn.DataParallel(model_lower, device_ids=[args.gpu])#, find_unused_parameters=True)
+        model = torch.nn.DataParallel(model)#, find_unused_parameters=True)
+        model_lower = torch.nn.DataParallel(model_lower)#, find_unused_parameters=True)
 
     else:
         model.cuda()
-        model_lower.cuda(args.gpu)
+        model_lower.cuda()
         # DistributedDataParallel will divide and allocate batch_size to all
         # available GPUs if device_ids are not set
         model = torch.nn.DataParallel(model)#, find_unused_parameters=True)
@@ -236,7 +236,7 @@ def main_worker(gpu, ngpus_per_node, args):
     train_sampler = None
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=False,
+        train_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
     val_loader = torch.utils.data.DataLoader(
@@ -264,7 +264,7 @@ def main_worker(gpu, ngpus_per_node, args):
     imagenet_train_sampler = None
 
     imagenet_train_loader = torch.utils.data.DataLoader(
-        imagenet_train_dataset, batch_size=args.imagenet_batch_size, shuffle=False,
+        imagenet_train_dataset, batch_size=args.imagenet_batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True, sampler=imagenet_train_sampler)
 
     imagenet_val_loader = torch.utils.data.DataLoader(
