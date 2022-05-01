@@ -343,7 +343,12 @@ def test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_pa
     for name, m in model.named_modules():
         if isinstance(m, MaskedConv2d):
             m.set_upper()
-            # print(m.mask_beta)
+            print(name)
+            print(((m.mask_beta ** 2) / ((m.mask_beta ** 2) + m.epsilon)).mean())
+            print(((m.mask_alpha ** 2) / ((m.mask_alpha ** 2) + m.epsilon)).mean())
+            print(((m.mask_alpha ** 2) / ((m.mask_alpha ** 2) + m.epsilon) * (m.mask_beta ** 2) / ((m.mask_beta ** 2) + m.epsilon)).mean())
+            
+    # assert False
     for i, (image, target) in enumerate(val_loader):
 
         image = image.cuda()

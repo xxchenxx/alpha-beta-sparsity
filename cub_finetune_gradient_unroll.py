@@ -28,7 +28,8 @@ import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from utils import *
-from utils import train_with_imagenet_gdp, test_with_imagenet
+from gradient_unroll import train_with_imagenet_unroll
+from utils import test_with_imagenet
 from pruning_utils import check_sparsity,extract_mask,prune_model_custom
 import copy
 import torch.nn.utils.prune as prune
@@ -173,30 +174,41 @@ def main_worker(gpu, ngpus_per_node, args):
     from torch.nn import init
     init.kaiming_normal_(model.new_fc.weight.data)
     process_group = torch.distributed.new_group(list(range(args.world_size)))
+    model_lower = copy.deepcopy(model)
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model, process_group)
+    model_lower = nn.SyncBatchNorm.convert_sync_batchnorm(model_lower, process_group)
 
     # init pretrianed weight
-    ticket_init_weight = deepcopy(model.state_dict())
     for m in model.modules():
         if isinstance(m, MaskedConv2d):
             m.set_incremental_weights()
-            #m.set_lower()
+    for m in model_lower.modules():
+        if isinstance(m, MaskedConv2d):
+            m.set_incremental_weights(beta=False)
     print('dataparallel mode')
+    
+
     if args.gpu is not None:
         torch.cuda.set_device(args.gpu)
         model.cuda(args.gpu)
+        model_lower.cuda(args.gpu)
+
         # When using a single GPU per process and per
         # DistributedDataParallel, we need to divide the batch size
         # ourselves based on the total number of GPUs we have
         args.batch_size = int(args.batch_size / ngpus_per_node)
         args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])#, find_unused_parameters=True)
+        model_lower = torch.nn.parallel.DistributedDataParallel(model_lower, device_ids=[args.gpu])#, find_unused_parameters=True)
+
     else:
         model.cuda()
+        model_lower.cuda(args.gpu)
         # DistributedDataParallel will divide and allocate batch_size to all
         # available GPUs if device_ids are not set
         model = torch.nn.parallel.DistributedDataParallel(model)#, find_unused_parameters=True)
-
+        model_lower = torch.nn.parallel.DistributedDataParallel(model_lower)#, find_unused_parameters=True)
+        
     # Data loading code
     initialization = copy.deepcopy(model.module.state_dict())
     cudnn.benchmark = True
@@ -278,8 +290,8 @@ def main_worker(gpu, ngpus_per_node, args):
     optimizer = torch.optim.SGD([
                 {'params': [p for name, p in model.named_parameters() if 'mask' not in name], "lr": args.lr},
                 {'params': [p for name, p in model.named_parameters() if 'mask' in name], "lr": args.reg_lr, 'weight_decay': 0}
-            ], momentum=args.momentum)
-    
+            ], args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+            
     for m in model.modules():
         if isinstance(m, MaskedConv2d):
             # assert m.weight_alpha.requires_grad
@@ -332,7 +344,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
         print(optimizer.state_dict()['param_groups'][0]['lr'])
 
-        acc = train_with_imagenet_gdp(train_loader, imagenet_train_loader, model, criterion, optimizer, epoch, args)
+        acc = train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model_lower, criterion, optimizer, epoch, args)
         
         scheduler.step()
         # evaluate on validation set
@@ -340,6 +352,7 @@ def main_worker(gpu, ngpus_per_node, args):
         # evaluate on test set
         all_result['train'].append(acc)
         all_result['ta'].append(tacc)
+
         if epoch % 5 == 0:
             torch.save(model.state_dict(), os.path.join(args.save_dir, f"model_{epoch}.pth.tar"))
 

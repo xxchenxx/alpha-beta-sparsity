@@ -216,174 +216,30 @@ def main_worker(gpu, ngpus_per_node, args):
                                  std=(0.229, 0.224, 0.225))
 
     ]
-    train_dataset = cub200(args.data, True, transforms.Compose(train_transform_list))
     val_dataset = cub200(args.data, False, transforms.Compose(test_transforms_list))
-
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-    else:
-        train_sampler = None
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
         batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
-    
-    #imagenet_traindir = os.path.join(args.imagenet_data, 'imagenet-c.x-full','gaussian_noise','3')
-    imagenet_traindir = args.imagenet_train_data
-    
-    imagenet_valdir = args.imagenet_val_data
-    imagenet_normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
-
-    imagenet_train_dataset = datasets.ImageFolder(
-        imagenet_traindir,
-        transforms.Compose([
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            imagenet_normalize,
-        ]))
-
-    if args.distributed:
-        imagenet_train_sampler = torch.utils.data.distributed.DistributedSampler(imagenet_train_dataset)
-    else:
-        imagenet_train_sampler = None
-
-    imagenet_train_loader = torch.utils.data.DataLoader(
-        imagenet_train_dataset, batch_size=args.imagenet_batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=imagenet_train_sampler)
-
-    imagenet_val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(imagenet_valdir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            imagenet_normalize,
-        ])),
-        batch_size=args.imagenet_batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
 
     # imagenet_train_loader = None
     criterion = nn.CrossEntropyLoss()
     alpha_params = {}
     beta_params = {}
-    model_device = list(model.parameters())[0].device
-
-    optimizer = torch.optim.SGD([
-                {'params': [p for name, p in model.named_parameters() if 'mask' not in name], "lr": args.lr},
-                {'params': [p for name, p in model.named_parameters() if 'mask' in name], "lr": args.reg_lr, 'weight_decay': 0}
-            ], momentum=args.momentum)
     
+
+    model.load_state_dict(torch.load("cub_unroll_lr_5/model_94.pth.tar", map_location=f"cuda:{args.rank}"))
+
     for m in model.modules():
         if isinstance(m, MaskedConv2d):
-            # assert m.weight_alpha.requires_grad
-            # assert (m.weight_beta.requires_grad)
-            # assert (not m.weight.requires_grad)
-            pass
-
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
-    if args.resume:
-        if os.path.isfile(args.resume):
-            print("=> loading checkpoint '{}'".format(args.resume))
-            loc = 'cuda:{}'.format(args.gpu)
-            checkpoint = torch.load(args.resume, map_location=loc)
-            args.start_epoch = checkpoint['epoch']
-            start_epoch=args.start_epoch
-            all_result=checkpoint['result']
-            best_sa = checkpoint['best_sa']
-            start_state = checkpoint['state']
-            if start_state:
-                current_mask = extract_mask(checkpoint['state_dict'])
-                prune_model_custom(model.module, current_mask, conv1=True)
-                args.epochs = 45
-
-            model.load_state_dict(checkpoint['state_dict'])
-
-            optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
-            optimizer.load_state_dict(checkpoint['optimizer'])
-
-            print("=> loaded checkpoint '{}' (state {}, epoch {})"
-                .format(args.resume, checkpoint['state'], checkpoint['epoch']))
-        else:
-            print("=> no checkpoint found at '{}'".format(args.resume))
-
-    else:
-        all_result = {}
-        all_result['train'] = []
-        all_result['test_ta'] = []
-        all_result['ta'] = []
-
-        start_epoch = 0
-        start_state = 0
-        best_sa = 0
+            m.epsilon = 0.1 * (0.9) ** 94
     print('######################################## Start Standard Training Iterative Pruning ########################################')
-    for epoch in range(start_epoch, args.epochs):
-        if args.distributed:
-            train_sampler.set_epoch(epoch)
-            imagenet_train_sampler.set_epoch(epoch)
-
-        print(optimizer.state_dict()['param_groups'][0]['lr'])
-
-        acc = train_with_imagenet_gdp(train_loader, imagenet_train_loader, model, criterion, optimizer, epoch, args)
-        
-        scheduler.step()
         # evaluate on validation set
-        tacc = test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_params)
-        # evaluate on test set
-        all_result['train'].append(acc)
-        all_result['ta'].append(tacc)
-        if epoch % 5 == 0:
-            torch.save(model.state_dict(), os.path.join(args.save_dir, f"model_{epoch}.pth.tar"))
+    tacc = test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_params)
 
-        # remember best prec@1 and save checkpoint
-        is_best_sa = tacc  > best_sa
-        best_sa = max(tacc, best_sa)
-
-        if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                and args.rank % ngpus_per_node == 0):
-            save_checkpoint({
-                'result': all_result,
-                'epoch': epoch + 1,
-                'state_dict': model.state_dict(),
-                'best_sa': best_sa,
-                'optimizer': optimizer.state_dict(),
-                'scheduler': scheduler.state_dict(),
-                'alpha': alpha_params,
-                'beta': beta_params
-            }, is_SA_best=is_best_sa, pruning=0, save_path=args.save_dir)
-
-        plt.plot(all_result['train'], label='train_acc')
-        plt.plot(all_result['ta'], label='val_acc')
-        plt.legend()
-        plt.savefig(os.path.join(args.save_dir, 'net_train.png'))
-        plt.close()
-
-    #report result
-    print('* best SA={}'.format(all_result['ta'][np.argmax(np.array(all_result['ta']))]))
-
-    all_result = {}
-    all_result['train'] = []
-    all_result['ta'] = []
-
-    best_sa = 0
-    start_epoch = 0
-
-    pruning_model(model.module, 0.2)
-    check_sparsity(model.module, True)
-
-    optimizer = torch.optim.SGD(model.parameters(), 1e-5,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
-
-    args.epochs = 45
+    print(tacc)
 
 if __name__ == '__main__':
     main()
