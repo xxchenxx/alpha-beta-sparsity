@@ -251,7 +251,7 @@ def main_worker(gpu, ngpus_per_node, args):
     imagenet_normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
-    imagenet_train_dataset = datasets_my.ImageFolder(
+    imagenet_train_dataset = datasets.ImageFolder(
         imagenet_traindir,
         transforms.Compose([
             transforms.RandomResizedCrop(224),
@@ -267,7 +267,7 @@ def main_worker(gpu, ngpus_per_node, args):
         num_workers=args.workers, pin_memory=True, sampler=imagenet_train_sampler)
 
     imagenet_val_loader = torch.utils.data.DataLoader(
-        datasets_my.ImageFolder(imagenet_valdir, transforms.Compose([
+        datasets.ImageFolder(imagenet_valdir, transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
