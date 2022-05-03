@@ -1,0 +1,15 @@
+# LSBATCH: User input
+#!/bin/bash
+###LSf Syntax
+#BSUB -nnodes 1
+#BSUB -W 720
+#BSUB -G heas
+#BSUB -e air_unroll_lamb_1e-4.txt
+#BSUB -o air_unroll_lamb_1e-4.txt
+#BSUB -J air_unroll_lamb_1e-4
+#BSUB -q pbatch
+cd /usr/workspace/olivare/
+source opence/bin/activate
+cd /g/g20/olivare/alpha-beta-sparsity/
+ 
+CUDA_VISIBLE_DEVICES=0,1,2,3 python -u car_aircraft_gradient_unroll.py --imagenet_train_data /usr/workspace/RML-data/data/imagenet/imagenet-c.x-full/gaussian_noise/3/ --imagenet_val_data /usr/workspace/RML-data/data/imagenet/val --data /usr/workspace/RML-data/data/air/ --rate 0.2 --save_dir /usr/workspace/olivare/air_unroll --epoch 95 --worker 4 --checkpoint /usr/workspace/olivare/imagenetc_imp_debug3/0checkpoint.pth.tar --lamb 1e-4 --reg-lr 3.5 --dataset air
