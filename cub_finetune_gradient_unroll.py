@@ -5,15 +5,8 @@ support datasets: cifar10, Fashionmnist, cifar100, svhn
 '''
 
 import os
-import pdb
-from sched import scheduler
-import time
-import pickle
-import random
-import shutil
 import argparse
 import numpy as np
-from copy import deepcopy
 import matplotlib.pyplot as plt
 import torch
 import torch.optim
@@ -23,7 +16,6 @@ import torch.nn.functional as F
 #import torchvision.models as models
 from models.resnet import resnet18, MaskedConv2d
 import torch.multiprocessing as mp
-import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
@@ -102,6 +94,8 @@ parser.add_argument("--sparsity-pen", default=1e-9, type=float)
 parser.add_argument('--l1-reg-beta', type=float, default=1e-6)
 parser.add_argument('--reg-lr', type=float, default=10)
 parser.add_argument('--lamb', type=float, default=1)
+
+parser.add_argument('--ten-shot', action="store_true")
 
 
 def main():
@@ -214,7 +208,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # Data loading code
     initialization = copy.deepcopy(model.module.state_dict())
     cudnn.benchmark = True
-    from cub import cub200
+    from cub import cub200, cub200_10
     train_transform_list = [
         transforms.RandomResizedCrop(448),
         transforms.RandomHorizontalFlip(),
@@ -230,9 +224,12 @@ def main_worker(gpu, ngpus_per_node, args):
                                  std=(0.229, 0.224, 0.225))
 
     ]
-    train_dataset = cub200(args.data, True, transforms.Compose(train_transform_list))
-    val_dataset = cub200(args.data, False, transforms.Compose(test_transforms_list))
-
+    if not args.ten_shot:
+        train_dataset = cub200(args.data, True, transforms.Compose(train_transform_list))
+        val_dataset = cub200(args.data, False, transforms.Compose(test_transforms_list))
+    else:
+        train_dataset = cub200_10(args.data, True, transforms.Compose(train_transform_list))
+        val_dataset = cub200_10(args.data, False, transforms.Compose(test_transforms_list))
     train_sampler = None
 
     train_loader = torch.utils.data.DataLoader(
