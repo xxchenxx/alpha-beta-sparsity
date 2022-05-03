@@ -225,13 +225,13 @@ def main_worker(gpu, ngpus_per_node, args):
                                  std=(0.229, 0.224, 0.225))
 
     ]
-    import datasets
+    import datasets_my
     if args.dataset == 'cars':
-        train_dataset = datasets.STANFORD_CAR(args.data, True, transforms.Compose(train_transform_list))
-        val_dataset = datasets.STANFORD_CAR(args.data, False, transforms.Compose(test_transforms_list))
+        train_dataset = datasets_my.STANFORD_CAR(args.data, True, transforms.Compose(train_transform_list))
+        val_dataset = datasets_my.STANFORD_CAR(args.data, False, transforms.Compose(test_transforms_list))
     else:
-        train_dataset = datasets.FGVC_aircraft(args.data, True, transforms.Compose(train_transform_list))
-        val_dataset = datasets.FGVC_aircraft(args.data, False, transforms.Compose(test_transforms_list))
+        train_dataset = datasets_my.FGVC_aircraft(args.data, True, transforms.Compose(train_transform_list))
+        val_dataset = datasets_my.FGVC_aircraft(args.data, False, transforms.Compose(test_transforms_list))
     train_sampler = None
 
     train_loader = torch.utils.data.DataLoader(
@@ -251,7 +251,7 @@ def main_worker(gpu, ngpus_per_node, args):
     imagenet_normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
-    imagenet_train_dataset = datasets.ImageFolder(
+    imagenet_train_dataset = datasets_my.ImageFolder(
         imagenet_traindir,
         transforms.Compose([
             transforms.RandomResizedCrop(224),
@@ -267,7 +267,7 @@ def main_worker(gpu, ngpus_per_node, args):
         num_workers=args.workers, pin_memory=True, sampler=imagenet_train_sampler)
 
     imagenet_val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(imagenet_valdir, transforms.Compose([
+        datasets_my.ImageFolder(imagenet_valdir, transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
