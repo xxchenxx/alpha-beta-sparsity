@@ -96,7 +96,7 @@ parser.add_argument('--reg-lr', type=float, default=10)
 parser.add_argument('--lamb', type=float, default=1)
 
 parser.add_argument('--ten-shot', action="store_true")
-
+parser.add_argument('--lower_steps', type=int, default=1)
 
 def main():
     best_sa = 0

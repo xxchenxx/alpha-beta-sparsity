@@ -41,35 +41,41 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
             for key in list(state_dict.keys()):
                 if 'mask_beta' in key: del state_dict[key]
             model_lower.load_state_dict(state_dict)
-            try:
-                imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
-            except:
-                imagenet_train_loader_iter = iter(imagenet_train_loader)
-                imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
-            # compute output
-            imagenet_image = imagenet_image.cuda()
-            imagenet_target = imagenet_target.cuda()
-            
-            weights = []
-            alphas = []
-            output_old, output_new = model(image)
-            loss = criterion(output_old, target) + 0 * output_new.sum()
-            loss.backward()
-            optimizer.zero_grad()
-            for name, m in model.named_modules():
-                if isinstance(m, MaskedConv2d):
-                    m.mask_alpha.grad = None
-            optimizer.step()
-            model.zero_grad()
+            for _ in range(args.lower_steps):            
+                try:
+                    imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
+                except:
+                    imagenet_train_loader_iter = iter(imagenet_train_loader)
+                    imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
+                # compute output
+                imagenet_image = imagenet_image.cuda()
+                imagenet_target = imagenet_target.cuda()
+                
+                weights = []
+                alphas = []
+                output_old, output_new = model(image)
+                loss = criterion(output_old, target) + 0 * output_new.sum()
+                loss.backward()
+                optimizer.zero_grad()
+                for name, m in model.named_modules():
+                    if isinstance(m, MaskedConv2d):
+                        m.mask_alpha.grad = None
+                if _ > 0:
+                    for name, m in model.named_modules():
+                        if isinstance(m, MaskedConv2d):
+                            m.weight.grad.data = torch.sign(m.weight.grad.data)
+                            
+                optimizer.step()
 
-            # calculate grad
-            output_old, output_new = model_lower(image)
-            loss_lower = criterion(output_old, target) + 0 * output_new.sum()
-            for name, m in model_lower.named_modules():
-                if isinstance(m, MaskedConv2d):
-                    weights.append(m.weight)
-                    alphas.append(m.mask_alpha)
-            grad_w = torch.autograd.grad(loss_lower, weights, create_graph=True, retain_graph=True)
+                # calculate grad
+                if _ == 0:
+                    output_old, output_new = model_lower(image)
+                    loss_lower = criterion(output_old, target) + 0 * output_new.sum()
+                    for name, m in model_lower.named_modules():
+                        if isinstance(m, MaskedConv2d):
+                            weights.append(m.weight)
+                            alphas.append(m.mask_alpha)
+                    grad_w = torch.autograd.grad(loss_lower, weights, create_graph=True, retain_graph=True)
             # print(torch.autograd.grad(grad_w[0].sum(), alphas))
             # assert False
 
