@@ -229,7 +229,7 @@ def main_worker(gpu, ngpus_per_node, args):
     alpha_params = {}
     beta_params = {}
     
-    checkpoint = torch.load("cub_unroll_lr_5/model_94.pth.tar", map_location=f"cpu")
+    checkpoint = torch.load("/usr/workspace/olivare/cub_unroll/0model_SA_best.pth.tar", map_location=f"cpu")
     epoch = checkpoint['epoch']
     model.load_state_dict(checkpoint['state_dict'])
 
