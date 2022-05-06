@@ -229,12 +229,13 @@ def main_worker(gpu, ngpus_per_node, args):
     alpha_params = {}
     beta_params = {}
     
-
-    model.load_state_dict(torch.load("cub_unroll_lr_5/model_94.pth.tar", map_location=f"cuda:{args.rank}"))
+    checkpoint = torch.load("cub_unroll_lr_5/model_94.pth.tar", map_location=f"cpu")
+    epoch = checkpoint['epoch']
+    model.load_state_dict(checkpoint['state_dict'])
 
     for m in model.modules():
         if isinstance(m, MaskedConv2d):
-            m.epsilon = 0.1 * (0.9) ** 94
+            m.epsilon = 0.1 * (0.9) ** epoch
     print('######################################## Start Standard Training Iterative Pruning ########################################')
         # evaluate on validation set
     tacc = test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_params)
