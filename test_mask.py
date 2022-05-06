@@ -208,7 +208,7 @@ def main_worker(gpu, ngpus_per_node, args):
             m.epsilon = 0.1 * (0.9) ** epoch
     print('######################################## Start Standard Training Iterative Pruning ########################################')
         # evaluate on validation set
-    for name, m in model.named_modules():
+    for name, m in model.module.named_modules():
         if isinstance(m, MaskedConv2d):
             m.set_upper()
             print(name)
