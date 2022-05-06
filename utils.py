@@ -348,7 +348,7 @@ def test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_pa
             print(((m.mask_alpha ** 2) / ((m.mask_alpha ** 2) + m.epsilon)).mean())
             print(((m.mask_alpha ** 2) / ((m.mask_alpha ** 2) + m.epsilon) * (m.mask_beta ** 2) / ((m.mask_beta ** 2) + m.epsilon)).mean())
             
-    assert False
+
     for i, (image, target) in enumerate(val_loader):
 
         image = image.cuda()
