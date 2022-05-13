@@ -105,37 +105,40 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
         grads = torch.autograd.grad(aux_loss, alphas, retain_graph=True)
         idx = 0
         alpha_lr = optimizer.param_groups[1]['lr']
-        for m in model.modules():
-            if isinstance(m, MaskedConv2d):
-                m.mask_alpha.data.sub_(grads[idx] * alpha_lr)
-                idx += 1
+        if not args.no_alpha:
+            for m in model.modules():
+                if isinstance(m, MaskedConv2d):
+                    m.mask_alpha.data.sub_(grads[idx] * alpha_lr)
+                    idx += 1
 
         # end unrolling
 
         loss = loss.float()
         for name, m in model.named_modules():
            if isinstance(m, MaskedConv2d):
-                beta = m.mask_beta.data.detach().clone()
-                lr = optimizer.param_groups[1]['lr']
-                # print(lr * args.lamb)
-                #print(beta.data.abs().mean())
-                m1 = beta >= lr * args.lamb
-                m2 = beta <= -lr * args.lamb
-                m3 = (beta.abs() < lr * args.lamb)
-                m.mask_beta.data[m1] = m.mask_beta.data[m1] - lr * args.lamb
-                m.mask_beta.data[m2] = m.mask_beta.data[m2] + lr * args.lamb
-                m.mask_beta.data[m3] = 0
-
-                alpha = m.mask_alpha.data.detach().clone()
-                lr = optimizer.param_groups[1]['lr']
-                # print(lr * args.lamb)
-                #print(alpha.data.abs().mean())
-                m1 = alpha >= lr * args.lamb
-                m2 = alpha <= -lr * args.lamb
-                m3 = (alpha.abs() < lr * args.lamb)
-                m.mask_alpha.data[m1] = m.mask_alpha.data[m1] - lr * args.lamb
-                m.mask_alpha.data[m2] = m.mask_alpha.data[m2] + lr * args.lamb
-                m.mask_alpha.data[m3] = 0
+                if not args.no_beta:
+                    beta = m.mask_beta.data.detach().clone()
+                    lr = optimizer.param_groups[1]['lr']
+                    # print(lr * args.lamb)
+                    #print(beta.data.abs().mean())
+                    
+                    m1 = beta >= lr * args.lamb
+                    m2 = beta <= -lr * args.lamb
+                    m3 = (beta.abs() < lr * args.lamb)
+                    m.mask_beta.data[m1] = m.mask_beta.data[m1] - lr * args.lamb
+                    m.mask_beta.data[m2] = m.mask_beta.data[m2] + lr * args.lamb
+                    m.mask_beta.data[m3] = 0
+                if not args.no_alpha:
+                    alpha = m.mask_alpha.data.detach().clone()
+                    lr = optimizer.param_groups[1]['lr']
+                    # print(lr * args.lamb)
+                    #print(alpha.data.abs().mean())
+                    m1 = alpha >= lr * args.lamb
+                    m2 = alpha <= -lr * args.lamb
+                    m3 = (alpha.abs() < lr * args.lamb)
+                    m.mask_alpha.data[m1] = m.mask_alpha.data[m1] - lr * args.lamb
+                    m.mask_alpha.data[m2] = m.mask_alpha.data[m2] + lr * args.lamb
+                    m.mask_alpha.data[m3] = 0
         # measure accuracy and record loss
         prec1 = accuracy(output_new.data, target)[0]
 
