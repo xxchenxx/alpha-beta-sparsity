@@ -12,4 +12,4 @@ cd /usr/workspace/olivare/
 source opence/bin/activate
 cd /g/g20/olivare/alpha-beta-sparsity/
  
-CUDA_VISIBLE_DEVICES=0,1,2,3 python -u car_aircraft_gradient_unroll.py --imagenet_train_data /usr/workspace/RML-data/data/imagenet/imagenet-c.x-full/gaussian_noise/3/ --imagenet_val_data /usr/workspace/RML-data/data/imagenet/val --data /usr/workspace/RML-data/data/car/ --rate 0.2 --save_dir /usr/workspace/olivare/cars_unroll --epoch 95 --worker 4 --checkpoint /usr/workspace/olivare/imagenetc_imp_debug3/0checkpoint.pth.tar --lamb 1e-4 --reg-lr 3.5 --dataset cars
+CUDA_VISIBLE_DEVICES=0,1,2,3 python -u car_aircraft_gradient_unroll.py --imagenet_train_data /usr/workspace/RML-data/data/imagenet/imagenet-c.x-full/gaussian_noise/3/ --imagenet_val_data /usr/workspace/RML-data/data/imagenet/val --data /usr/workspace/RML-data/data/car/ --rate 0.2 --save_dir /usr/workspace/olivare/cars_unroll --epoch 95 --worker 4  --lamb 1e-4 --reg-lr 3.5 --dataset cars
