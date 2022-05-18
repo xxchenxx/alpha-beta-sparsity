@@ -99,6 +99,7 @@ parser.add_argument('--ten-shot', action="store_true")
 parser.add_argument('--lower_steps', type=int, default=1)
 parser.add_argument('--no-alpha', action="store_true")
 parser.add_argument('--no-beta', action="store_true")
+parser.add_argument('--imagenet-pretrained', action="store_true")
 
 def main():
     best_sa = 0
@@ -155,7 +156,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                 world_size=args.world_size, rank=args.rank)
     '''
 
-    model = resnet18(pretrained=False, num_classes=1000, imagenet=True)
+    model = resnet18(pretrained=args.imagenet_pretrained, num_classes=1000, imagenet=True)
     if args.checkpoint and not args.resume:
         print(f"LOAD CHECKPOINT {args.checkpoint}")
         checkpoint = torch.load(args.checkpoint,map_location="cpu")
