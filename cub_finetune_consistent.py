@@ -292,8 +292,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     optimizer = torch.optim.SGD([
                 {'params': [p for name, p in model.named_parameters() if 'mask' not in name], "lr": args.lr},
-                {'params': [p for name, p in model.named_parameters() if 'mask' in name], "lr": args.reg_lr, 'weight_decay': 0}
-            ], args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+            ], momentum=args.momentum, weight_decay=args.weight_decay)
             
     for m in model.modules():
         if isinstance(m, MaskedConv2d):
