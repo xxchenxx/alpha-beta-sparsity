@@ -349,7 +349,7 @@ def main_worker(gpu, ngpus_per_node, args):
         update_ema_variables(model, model_teacher, 0.999, epoch)
         scheduler.step()
         # evaluate on validation set
-        tacc = test_with_imagenet(val_loader, model_teacher, criterion, args, alpha_params, beta_params)
+        tacc = test_with_imagenet(val_loader, model_teacher, criterion, args, alpha_params, beta_params, log=False)
         # evaluate on test set
         all_result['train'].append(acc)
         all_result['ta'].append(tacc)
