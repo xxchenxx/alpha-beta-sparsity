@@ -350,7 +350,7 @@ def main_worker(gpu, ngpus_per_node, args):
         acc, step = train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model, model_teacher, criterion, optimizer, epoch, args, consistency_weight, consistency_criterion, step)
         scheduler.step()
         # evaluate on validation set
-        tacc = test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_params, log=False)
+        # tacc = test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_params, log=False)
         tacc = test_with_imagenet(val_loader, model_teacher, criterion, args, alpha_params, beta_params, log=False)
         # evaluate on test set
         all_result['train'].append(acc)
