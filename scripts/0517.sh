@@ -4,9 +4,9 @@
 #BSUB -nnodes 1
 #BSUB -W 720
 #BSUB -G heas
-#BSUB -e cub_mean_teacher.txt
-#BSUB -o cub_mean_teacher.txt
-#BSUB -J cub_mean_teacher
+#BSUB -e cub_mean_teacher_2.txt
+#BSUB -o cub_mean_teacher_2.txt
+#BSUB -J cub_mean_teacher_2
 #BSUB -q pbatch
 cd /usr/workspace/olivare/
 source opence/bin/activate
