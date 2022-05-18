@@ -258,12 +258,6 @@ def train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model,
 
     print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
 
-    if args.rank == 0:
-        for name, p in model.named_parameters():
-            if 'mask_alpha' in name or 'mask_beta' in name:
-                print(name, (p.data.abs() ** 5).mean())
-                
-
     return top1.avg
 
 
