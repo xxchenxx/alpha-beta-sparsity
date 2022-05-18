@@ -55,7 +55,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                 
                 
                 output_old, output_new = model(imagenet_image)
-                loss = criterion(output_old, target) + 0 * output_new.sum()
+                loss = criterion(output_old, imagenet_target) + 0 * output_new.sum()
                 loss.backward()
                 optimizer.zero_grad()
                 for name, m in model.named_modules():
@@ -70,7 +70,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
 
                 if _ == 0:
                     output_old, output_new = model_lower(imagenet_image)
-                    loss_lower = criterion(output_old, target) + 0 * output_new.sum()
+                    loss_lower = criterion(output_old, imagenet_target) + 0 * output_new.sum()
                     for name, m in model_lower.named_modules():
                         if isinstance(m, MaskedConv2d):
                             weights.append(m.weight)
