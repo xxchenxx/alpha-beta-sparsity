@@ -223,7 +223,8 @@ def train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model,
             output_old_ema, output_new_ema = model_ema(image)
 
             consistency_loss = consistency_weight * \
-            consistency_criterion(output_new, output_new_ema) / output_new.shape[0] * 0.001
+            consistency_criterion(output_new, output_new_ema) / output_new.shape[0]
+            print(consistency_loss)
             optimizer.zero_grad()
             consistency_loss.backward()
             optimizer.step()
@@ -232,7 +233,8 @@ def train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model,
         output_old, output_new = model(image)
         output_old_ema, output_new_ema = model_ema(image)
         consistency_loss = consistency_weight * \
-            consistency_criterion(output_new, output_new_ema) / output_new.shape[0]* 0.001
+            consistency_criterion(output_new, output_new_ema) / output_new.shape[0]
+        print(consistency_loss)
         loss = criterion(output_new, target) + consistency_loss
         optimizer.zero_grad()
         loss.backward()
