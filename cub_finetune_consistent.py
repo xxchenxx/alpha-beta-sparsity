@@ -163,7 +163,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                 world_size=args.world_size, rank=args.rank)
     '''
 
-    model = resnet18(pretrained=True, num_classes=1000, imagenet=True)
+    model = resnet18(pretrained=False, num_classes=1000, imagenet=True)
     if args.checkpoint and not args.resume:
         print(f"LOAD CHECKPOINT {args.checkpoint}")
         checkpoint = torch.load(args.checkpoint,map_location="cpu")
