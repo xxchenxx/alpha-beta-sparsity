@@ -51,7 +51,7 @@ def pruning_model(model, px=0.2):
 
 def get_current_consistency_weight(epoch):
     # Consistency ramp-up from https://arxiv.org/abs/1610.02242
-    return 0.3 * ramps.sigmoid_rampup(epoch, 400)
+    return 0.001 * ramps.sigmoid_rampup(epoch, 400)
 
 parser = argparse.ArgumentParser(description='PyTorch Iterative Pruning')
 
