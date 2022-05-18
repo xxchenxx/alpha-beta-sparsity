@@ -190,7 +190,7 @@ def main_worker(gpu, ngpus_per_node, args):
             m.set_incremental_weights()
     for m in model_teacher.modules():
         if isinstance(m, MaskedConv2d):
-            m.set_incremental_weights(beta=False)
+            m.set_incremental_weights()
     print('dataparallel mode')
     
 
@@ -401,7 +401,7 @@ def update_ema_variables(model, ema_model, alpha, global_step):
 
     alpha = min(1 - 1 / (global_step + 1), alpha)
     for ema_param, param in zip(ema_model.parameters(), model.parameters()):
-        ema_param.data.mul_(alpha).add_(1 - alpha, (param))
+        ema_param.data.mul_(alpha).add_(1 - alpha, param)
 
 if __name__ == '__main__':
     main()
