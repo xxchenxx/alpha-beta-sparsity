@@ -104,7 +104,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
         
         grads = torch.autograd.grad(aux_loss, alphas, retain_graph=True)
         idx = 0
-        alpha_lr = optimizer.param_groups[1]['lr']
+        alpha_lr = optimizer.param_groups[0]['lr']
         if not args.no_alpha:
             for m in model.modules():
                 if isinstance(m, MaskedConv2d):
