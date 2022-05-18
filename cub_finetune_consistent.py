@@ -342,12 +342,12 @@ def main_worker(gpu, ngpus_per_node, args):
         best_sa = 0
     print('######################################## Start Standard Training Iterative Pruning ########################################')
     model_teacher.load_state_dict(model.state_dict())
+    step = 0
     for epoch in range(start_epoch, args.epochs):
 
         print(optimizer.state_dict()['param_groups'][0]['lr'])
         consistency_weight = get_current_consistency_weight(epoch - 30)
-        acc = train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model, model_teacher, criterion, optimizer, epoch, args, consistency_weight, consistency_criterion)
-        update_ema_variables(model, model_teacher, 0.999, epoch)
+        acc, step = train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model, model_teacher, criterion, optimizer, epoch, args, consistency_weight, consistency_criterion, step)
         scheduler.step()
         # evaluate on validation set
         tacc = test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_params, log=False)
@@ -401,11 +401,6 @@ def main_worker(gpu, ngpus_per_node, args):
 
     args.epochs = 45
 
-def update_ema_variables(model, ema_model, alpha, global_step):
-
-    alpha = min(1 - 1 / (global_step + 1), alpha)
-    for ema_param, param in zip(ema_model.parameters(), model.parameters()):
-        ema_param.data.mul_(alpha).add_(1 - alpha, param)
 
 if __name__ == '__main__':
     main()

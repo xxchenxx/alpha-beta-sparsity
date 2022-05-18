@@ -193,7 +193,7 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
     return top1.avg
 
 
-def train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model, model_ema, criterion, optimizer, epoch, args, consistency_weight, consistency_criterion):
+def train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model, model_ema, criterion, optimizer, epoch, args, consistency_weight, consistency_criterion, step):
 
     losses = AverageMeter()
     top1 = AverageMeter()
@@ -224,12 +224,15 @@ def train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model,
 
             consistency_loss = consistency_weight * \
             consistency_criterion(output_new, output_new_ema) / output_new.shape[0]
+            
             print(consistency_loss)
             optimizer.zero_grad()
             consistency_loss.backward()
             optimizer.step()
             model.zero_grad()
 
+            update_ema_variables(model, model_ema, 0.999, step)
+            step = step + 1
         output_old, output_new = model(image)
         output_old_ema, output_new_ema = model_ema(image)
         consistency_loss = consistency_weight * \
@@ -238,10 +241,12 @@ def train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model,
         loss = criterion(output_new, target) + consistency_loss
         optimizer.zero_grad()
         loss.backward()
-
+        
         optimizer.step()
         # calculate (a + b)
         model.zero_grad()
+        update_ema_variables(model, model_ema, 0.999, step)
+        step = step + 1
         loss = loss.float()
         # measure accuracy and record loss
         prec1 = accuracy(output_new.data, target)[0]
@@ -260,9 +265,13 @@ def train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model,
 
     print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
 
-    return top1.avg
+    return top1.avg, step
 
+def update_ema_variables(model, ema_model, alpha, global_step):
 
+    alpha = min(1 - 1 / (global_step + 1), alpha)
+    for ema_param, param in zip(ema_model.parameters(), model.parameters()):
+        ema_param.data.mul_(alpha).add_(1 - alpha, param)
 
 def train_with_imagenet_gdp(train_loader, imagenet_train_loader, model, criterion, optimizer, epoch, args):
 
