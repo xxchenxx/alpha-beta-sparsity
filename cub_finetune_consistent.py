@@ -188,9 +188,11 @@ def main_worker(gpu, ngpus_per_node, args):
     for m in model.modules():
         if isinstance(m, MaskedConv2d):
             m.set_incremental_weights()
+            m.epsilon = 0
     for m in model_teacher.modules():
         if isinstance(m, MaskedConv2d):
             m.set_incremental_weights()
+            m.epsilon = 0
     print('dataparallel mode')
     
 
