@@ -348,13 +348,13 @@ def main_worker(gpu, ngpus_per_node, args):
         update_ema_variables(model, model_teacher, 0.999, epoch)
         scheduler.step()
         # evaluate on validation set
-        tacc = test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_params)
+        tacc = test_with_imagenet(val_loader, model_teacher, criterion, args, alpha_params, beta_params)
         # evaluate on test set
         all_result['train'].append(acc)
         all_result['ta'].append(tacc)
 
         if epoch % 5 == 0:
-            torch.save(model.state_dict(), os.path.join(args.save_dir, f"model_{epoch}.pth.tar"))
+            torch.save(model_teacher.state_dict(), os.path.join(args.save_dir, f"model_{epoch}.pth.tar"))
 
         # remember best prec@1 and save checkpoint
         is_best_sa = tacc  > best_sa
