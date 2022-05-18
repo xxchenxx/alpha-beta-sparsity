@@ -54,7 +54,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                 imagenet_target = imagenet_target.cuda()
                 
                 
-                output_old, output_new = model(image)
+                output_old, output_new = model(imagenet_image)
                 loss = criterion(output_old, target) + 0 * output_new.sum()
                 loss.backward()
                 optimizer.zero_grad()
@@ -69,7 +69,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                 optimizer.step()
 
                 if _ == 0:
-                    output_old, output_new = model_lower(image)
+                    output_old, output_new = model_lower(imagenet_image)
                     loss_lower = criterion(output_old, target) + 0 * output_new.sum()
                     for name, m in model_lower.named_modules():
                         if isinstance(m, MaskedConv2d):
