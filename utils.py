@@ -193,6 +193,81 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
     return top1.avg
 
 
+def train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model, model_ema, criterion, optimizer, epoch, args, consistency_weight, consistency_criterion):
+
+    losses = AverageMeter()
+    top1 = AverageMeter()
+
+    # switch to train mode
+    model.train()
+
+    start = time.time()
+    imagenet_train_loader_iter = iter(imagenet_train_loader)
+    for i, (image, target) in enumerate(train_loader):
+
+        if epoch < args.warmup:
+            warmup_lr(epoch, i+1, optimizer, one_epoch_step=len(train_loader), args=args)
+
+        image = image.cuda()
+        target = target.cuda()
+        if True:
+            try:
+                imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
+            except:
+                imagenet_train_loader_iter = iter(imagenet_train_loader)
+                imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
+            # compute output
+            imagenet_image = imagenet_image.cuda()
+            imagenet_target = imagenet_target.cuda()
+            output_old, output_new = model(image)
+            output_old_ema, output_new_ema = model_ema(image)
+
+            consistency_loss = consistency_weight * \
+            consistency_criterion(output_new, output_new_ema) / output_new.shape[0]
+            optimizer.zero_grad()
+            consistency_loss.backward()
+            optimizer.step()
+            model.zero_grad()
+
+        output_old, output_new = model(image)
+        output_old_ema, output_new_ema = model_ema(image)
+        consistency_loss = consistency_weight * \
+            consistency_criterion(output_new, output_new_ema) / output_new.shape[0]
+        loss = criterion(output_new, target) + consistency_loss
+        optimizer.zero_grad()
+        loss.backward()
+
+        optimizer.step()
+        # calculate (a + b)
+        model.zero_grad()
+        loss = loss.float()
+        # measure accuracy and record loss
+        prec1 = accuracy(output_new.data, target)[0]
+
+        losses.update(loss.item(), image.size(0))
+        top1.update(prec1.item(), image.size(0))
+
+        if i % args.print_freq == 0:
+            end = time.time()
+            print('Epoch: [{0}][{1}/{2}]\t'
+                'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                'Accuracy {top1.val:.3f} ({top1.avg:.3f})\t'
+                'Time {3:.2f}'.format(
+                    epoch, i, len(train_loader), end-start, loss=losses, top1=top1))
+            start = time.time()
+
+    print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
+
+    if args.rank == 0:
+        for name, p in model.named_parameters():
+            if 'mask_alpha' in name or 'mask_beta' in name:
+                print(name, (p.data.abs() ** 5).mean())
+                
+
+    return top1.avg
+
+
+
 def train_with_imagenet_gdp(train_loader, imagenet_train_loader, model, criterion, optimizer, epoch, args):
 
     losses = AverageMeter()
