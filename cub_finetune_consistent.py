@@ -341,6 +341,7 @@ def main_worker(gpu, ngpus_per_node, args):
         start_state = 0
         best_sa = 0
     print('######################################## Start Standard Training Iterative Pruning ########################################')
+    model_teacher.load_state_dict(model.state_dict())
     for epoch in range(start_epoch, args.epochs):
 
         print(optimizer.state_dict()['param_groups'][0]['lr'])
