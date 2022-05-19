@@ -219,8 +219,8 @@ def train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model,
             # compute output
             imagenet_image = imagenet_image.cuda()
             imagenet_target = imagenet_target.cuda()
-            output_old, output_new = model(image)
-            output_old_ema, output_new_ema = model_ema(image)
+            output_old, output_new = model(imagenet_image)
+            output_old_ema, output_new_ema = model_ema(imagenet_image)
 
             consistency_loss = consistency_weight * \
             consistency_criterion(output_new, output_new_ema) / output_new.shape[0]

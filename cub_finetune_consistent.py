@@ -295,13 +295,7 @@ def main_worker(gpu, ngpus_per_node, args):
     optimizer = torch.optim.SGD([
                 {'params': [p for name, p in model.named_parameters() if 'mask' not in name], "lr": args.lr},
             ], momentum=args.momentum, weight_decay=args.weight_decay)
-            
-    for m in model.modules():
-        if isinstance(m, MaskedConv2d):
-            # assert m.weight_alpha.requires_grad
-            # assert (m.weight_beta.requires_grad)
-            # assert (not m.weight.requires_grad)
-            pass
+        
 
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
     if args.resume:
