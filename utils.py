@@ -211,6 +211,8 @@ def train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model,
         image = image.cuda()
         target = target.cuda()
         if True:
+            model.eval()
+            model_ema.eval()
             try:
                 imagenet_image, imagenet_target = next(imagenet_train_loader_iter)
             except:
@@ -233,6 +235,8 @@ def train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model,
 
             update_ema_variables(model, model_ema, 0.999, step)
             step = step + 1
+            model.train()
+            model_ema.train()
         output_old, output_new = model(image)
         output_old_ema, output_new_ema = model_ema(image)
         consistency_loss = consistency_weight * \
