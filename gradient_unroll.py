@@ -88,15 +88,10 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
         optimizer.zero_grad()
         loss.backward()
         # remove weights grad
-        
         grad_new_w = []
         for name, m in model.named_modules():
             if isinstance(m, MaskedConv2d):
                 grad_new_w.append(m.weight.grad.data.clone())
-        
-        # calculate (a + b)
-        model.zero_grad()
-        
         # start unrolling
         aux_loss = 0
         for go, gn in zip(grad_w, grad_new_w):
@@ -111,6 +106,8 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                     m.mask_alpha.data.sub_(grads[idx] * alpha_lr)
                     idx += 1
         optimizer.step()
+        model.zero_grad()
+        
         # end unrolling
 
         loss = loss.float()
