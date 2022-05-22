@@ -115,7 +115,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
            if isinstance(m, MaskedConv2d):
                 if not args.no_beta:
                     beta = m.mask_beta.data.detach().clone()
-                    lr = optimizer.param_groups[0]['lr']
+                    lr = optimizer.param_groups[1]['lr']
                     # print(lr * args.lamb)
                     #print(beta.data.abs().mean())
                     
@@ -127,7 +127,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                     m.mask_beta.data[m3] = 0
                 if not args.no_alpha:
                     alpha = m.mask_alpha.data.detach().clone()
-                    lr = optimizer.param_groups[0]['lr']
+                    lr = optimizer.param_groups[1]['lr']
                     # print(lr * args.lamb)
                     #print(alpha.data.abs().mean())
                     m1 = alpha >= lr * args.lamb
