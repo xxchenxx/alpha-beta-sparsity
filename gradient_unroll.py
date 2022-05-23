@@ -37,6 +37,9 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
         image = image.cuda()
         target = target.cuda()
         if i % 10 == 0:
+            previous_lr = optimizer.param_groups[0]['lr']
+            current_lr = previous_lr / 100
+            optimizer.param_groups[0]['lr'] = current_lr
             state_dict = model.state_dict()
             for key in list(state_dict.keys()):
                 if 'mask_beta' in key: del state_dict[key]
@@ -78,7 +81,8 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                     grad_w = torch.autograd.grad(loss_lower, weights, create_graph=True, retain_graph=True)
             # print(torch.autograd.grad(grad_w[0].sum(), alphas))
             # assert False
-
+            
+            optimizer.param_groups[0]['lr'] = previous_lr
         for name, m in model.named_modules():
             if isinstance(m, MaskedConv2d):
                 m.set_upper()
