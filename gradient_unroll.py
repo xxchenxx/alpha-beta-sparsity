@@ -57,7 +57,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                 output_old, output_new = model(imagenet_image)
                 loss = criterion(output_old, imagenet_target) + 0 * output_new.sum()
                 loss.backward()
-                optimizer.zero_grad()
+                
                 for name, m in model.named_modules():
                     if isinstance(m, MaskedConv2d):
                         m.mask_alpha.grad = None
@@ -65,9 +65,9 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                     for name, m in model.named_modules():
                         if isinstance(m, MaskedConv2d):
                             m.weight.grad.data = torch.sign(m.weight.grad.data)
-
+                
                 optimizer.step()
-
+                optimizer.zero_grad()
                 if _ == 0:
                     output_old, output_new = model_lower(imagenet_image)
                     loss_lower = criterion(output_old, imagenet_target) + 0 * output_new.sum()
