@@ -70,7 +70,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                 if _ > 0:
                     for name, m in model.named_modules():
                         if isinstance(m, MaskedConv2d):
-                            m.weight.grad.data = torch.sign(m.weight.grad.data) * torch.norm(m.weight.grad.data)
+                            m.weight.grad.data = torch.sign(m.weight.grad.data) * 1e-4
                 
                 optimizer.step()
                 optimizer.zero_grad()
