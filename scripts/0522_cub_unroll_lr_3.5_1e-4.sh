@@ -4,9 +4,9 @@
 #BSUB -nnodes 1
 #BSUB -W 720
 #BSUB -G heas
-#BSUB -e cub_unroll_lamb_1e-4.txt
-#BSUB -o cub_unroll_lamb_1e-4.txt
-#BSUB -J cub_unroll_lamb_1e-4
+#BSUB -e cub_unroll_lr4_lamb_1e-4.txt
+#BSUB -o cub_unroll_lr4_lamb_1e-4.txt
+#BSUB -J cub_unroll_lr4_lamb_1e-4
 #BSUB -q pbatch
 cd /usr/workspace/olivare/
 source opence/bin/activate
