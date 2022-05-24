@@ -38,9 +38,8 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
         target = target.cuda()
         if i % 10 == 0:
             # decrease lr and fixed bn
-            model.eval()
             previous_lr = optimizer.param_groups[0]['lr']
-            current_lr = previous_lr / 100
+            current_lr = previous_lr / 10000
             optimizer.param_groups[0]['lr'] = current_lr
 
             state_dict = model.state_dict()
@@ -84,7 +83,6 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                     grad_w = torch.autograd.grad(loss_lower, weights, create_graph=True, retain_graph=True)
             # restore lr and bn
             optimizer.param_groups[0]['lr'] = previous_lr
-            model.train()
 
         for name, m in model.named_modules():
             if isinstance(m, MaskedConv2d):
@@ -106,7 +104,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
         
         grads = torch.autograd.grad(aux_loss, alphas, retain_graph=True)
         idx = 0
-        alpha_lr = optimizer.param_groups[0]['lr'] / 100
+        alpha_lr = optimizer.param_groups[0]['lr'] / 10000
         if not args.no_alpha:
             for m in model.modules():
                 if isinstance(m, MaskedConv2d):
