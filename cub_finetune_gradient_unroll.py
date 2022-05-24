@@ -267,16 +267,6 @@ def main_worker(gpu, ngpus_per_node, args):
         imagenet_train_dataset, batch_size=args.imagenet_batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True, sampler=imagenet_train_sampler)
 
-    imagenet_val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(imagenet_valdir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            imagenet_normalize,
-        ])),
-        batch_size=args.imagenet_batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
-
     # imagenet_train_loader = None
     criterion = nn.CrossEntropyLoss()
     alpha_params = {}
