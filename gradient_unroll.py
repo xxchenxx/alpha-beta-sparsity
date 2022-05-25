@@ -110,6 +110,15 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                 if isinstance(m, MaskedConv2d):
                     m.mask_alpha.data.sub_(grads[idx] * alpha_lr)
                     idx += 1
+        else:
+            for m in model.modules():
+                if isinstance(m, MaskedConv2d):
+                    m.mask_alpha.grad = None
+        
+        if args.no_beta:
+            for m in model.modules():
+                if isinstance(m, MaskedConv2d):
+                    m.mask_beta.grad = None
         optimizer.step()
         model.zero_grad()
         
