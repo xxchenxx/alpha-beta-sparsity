@@ -109,14 +109,14 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
         
         grads = torch.autograd.grad(aux_loss, alphas, retain_graph=True)
         idx = 0
-        alpha_lr = 1e-3
+        # alpha_lr = 1e-3
         if not args.no_alpha:
             for m in model.modules():
                 if isinstance(m, MaskedConv2d):
                     # print(grads[idx].abs().mean())
                     # print(m.mask_alpha.grad.abs().mean())
                     # print("----------")
-                    m.mask_alpha.grad.data.sub_(grads[idx] * alpha_lr)
+                    m.mask_alpha.grad.data.sub_(grads[idx] * 0.1)
                     idx += 1
         else:
             for m in model.modules():
