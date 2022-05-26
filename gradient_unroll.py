@@ -116,7 +116,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                     # print(grads[idx].abs().mean())
                     # print(m.mask_alpha.grad.abs().mean())
                     # print("----------")
-                    m.mask_alpha.grad.data.sub_(grads[idx] * 0.01)
+                    m.mask_alpha.grad.data.sub_(grads[idx] * 0.1)
                     idx += 1
         else:
             for m in model.modules():
