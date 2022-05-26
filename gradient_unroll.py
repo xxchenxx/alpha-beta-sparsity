@@ -41,9 +41,9 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
             for name, m in model.named_modules():
                 if isinstance(m, MaskedConv2d):
                     m.set_lower()
-            # decrease lr and fixed bn
+            # decrease lr
             previous_lr = optimizer.param_groups[0]['lr']
-            current_lr = previous_lr / 10
+            current_lr = 1e-2 # previous_lr / 10
             optimizer.param_groups[0]['lr'] = current_lr
             state_dict = model.state_dict()
 
@@ -86,7 +86,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                             weights.append(m.weight)
                             alphas.append(m.mask_alpha)
                     grad_w = torch.autograd.grad(loss_lower, weights, create_graph=True, retain_graph=True)
-            # restore lr and bn
+            # restore lr 
             optimizer.param_groups[0]['lr'] = previous_lr
 
             for name, m in model.named_modules():
@@ -109,12 +109,14 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
         
         grads = torch.autograd.grad(aux_loss, alphas, retain_graph=True)
         idx = 0
-        alpha_lr = optimizer.param_groups[0]['lr'] / 10 
+        alpha_lr = 1e-2
         if not args.no_alpha:
             for m in model.modules():
                 if isinstance(m, MaskedConv2d):
-                    print(grads[idx])
-                    m.mask_alpha.data.sub_(grads[idx] * alpha_lr * optimizer.param_groups[1]['lr'])
+                    # print(grads[idx].abs().mean())
+                    # print(m.mask_alpha.grad.abs().mean())
+                    # print("----------")
+                    m.mask_alpha.grad.data.sub_(grads[idx] * alpha_lr)
                     idx += 1
         else:
             for m in model.modules():
