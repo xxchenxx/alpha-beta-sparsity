@@ -38,6 +38,9 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
         image = image.cuda()
         target = target.cuda()
         if i % 10 == 0:
+            for name, m in model.named_modules():
+                if isinstance(m, MaskedConv2d):
+                    m.set_lower()
             # decrease lr and fixed bn
             previous_lr = optimizer.param_groups[0]['lr']
             current_lr = previous_lr / 100
@@ -86,9 +89,9 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
             # restore lr and bn
             optimizer.param_groups[0]['lr'] = previous_lr
 
-        for name, m in model.named_modules():
-            if isinstance(m, MaskedConv2d):
-                m.set_upper()
+            for name, m in model.named_modules():
+                if isinstance(m, MaskedConv2d):
+                    m.set_upper()
 
         output_old, output_new = model(image)
         loss = criterion(output_new, target) + 0 * output_old.sum()
