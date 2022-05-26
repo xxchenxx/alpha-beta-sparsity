@@ -27,8 +27,9 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
     start = time.time()
     # imagenet_train_loader_iter = iter(imagenet_train_loader)
     for name, m in model.named_modules():
-            if isinstance(m, MaskedConv2d):
-                m.epsilon *= 0.9
+        if isinstance(m, MaskedConv2d):
+            m.epsilon *= 0.9
+            
     for i, (image, target) in enumerate(train_loader):
 
         if epoch < args.warmup:
