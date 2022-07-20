@@ -25,7 +25,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
     # switch to train mode
     model.train()
     start = time.time()
-    # imagenet_train_loader_iter = iter(imagenet_train_loader)
+
     for name, m in model.named_modules():
         if isinstance(m, MaskedConv2d):
             m.epsilon *= 0.9
@@ -43,8 +43,8 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                     m.set_lower()
             # decrease lr
             previous_lr = optimizer.param_groups[0]['lr']
-            current_lr = 1e-3 # previous_lr / 10
-            optimizer.param_groups[0]['lr'] = current_lr
+            current_lr = args.lower_lr * epoch / args.epochs
+            optimizer.param_groups[0]['lr'] = current_lr # params 
             state_dict = model.state_dict()
 
             for key in list(state_dict.keys()):
@@ -64,23 +64,23 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                 
                 
                 output_old, output_new = model(imagenet_image)
-                loss = criterion(output_old, imagenet_target) + 0 * output_new.sum()
+                loss = criterion(output_old, imagenet_target)
                 loss.backward()
                 
                 for name, m in model.named_modules():
                     if isinstance(m, MaskedConv2d):
-                        m.mask_alpha.grad = None
-                        m.mask_beta.grad = None
+                        m.mask_alpha.grad = None # do not modify mask
+                        m.mask_beta.grad = None # do not modify mask
                 if _ > 0:
                     for name, m in model.named_modules():
                         if isinstance(m, MaskedConv2d):
-                            m.weight.grad.data = torch.sign(m.weight.grad.data) * 1e-4
+                            m.weight.grad.data = torch.sign(m.weight.grad.data) * args.sign_lr / current_lr
                 
                 optimizer.step()
                 optimizer.zero_grad()
                 if _ == 0:
                     output_old, output_new = model_lower(imagenet_image)
-                    loss_lower = criterion(output_old, imagenet_target) + 0 * output_new.sum()
+                    loss_lower = criterion(output_old, imagenet_target)
                     for name, m in model_lower.named_modules():
                         if isinstance(m, MaskedConv2d):
                             weights.append(m.weight)
@@ -94,7 +94,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                     m.set_upper()
 
         output_old, output_new = model(image)
-        loss = criterion(output_new, target) + 0 * output_old.sum()
+        loss = criterion(output_new, target)
         optimizer.zero_grad()
         loss.backward()
         # remove weights grad
@@ -110,13 +110,11 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
         grads = torch.autograd.grad(aux_loss, alphas, retain_graph=True)
         idx = 0
         # alpha_lr = 1e-3
+        idx = 0
         if not args.no_alpha:
             for m in model.modules():
                 if isinstance(m, MaskedConv2d):
-                    # print(grads[idx].abs().mean())
-                    # print(m.mask_alpha.grad.abs().mean())
-                    # print("----------")
-                    m.mask_alpha.grad.data.sub_(grads[idx] * 0.1)
+                    m.mask_alpha.grad.data.sub_(grads[idx] * current_lr)
                     idx += 1
         else:
             for m in model.modules():
@@ -139,8 +137,6 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                 if not args.no_beta:
                     beta = m.mask_beta.data.detach().clone()
                     lr = optimizer.param_groups[1]['lr']
-                    # print(lr * args.lamb)
-                    #print(beta.data.abs().mean())
                     
                     m1 = beta >= lr * args.lamb
                     m2 = beta <= -lr * args.lamb
@@ -151,8 +147,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                 if not args.no_alpha:
                     alpha = m.mask_alpha.data.detach().clone()
                     lr = optimizer.param_groups[1]['lr']
-                    # print(lr * args.lamb)
-                    #print(alpha.data.abs().mean())
+
                     m1 = alpha >= lr * args.lamb
                     m2 = alpha <= -lr * args.lamb
                     m3 = (alpha.abs() < lr * args.lamb)

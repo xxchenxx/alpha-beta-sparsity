@@ -93,6 +93,8 @@ parser.add_argument("--alpha-init", default=5, type=int)
 parser.add_argument("--sparsity-pen", default=1e-9, type=float)
 parser.add_argument('--l1-reg-beta', type=float, default=1e-6)
 parser.add_argument('--reg-lr', type=float, default=10)
+parser.add_argument('--sign-lr', type=float, default=1e-4)
+parser.add_argument('--lower-lr', type=float, default=1e-2)
 parser.add_argument('--lamb', type=float, default=1)
 
 parser.add_argument('--ten-shot', action="store_true")
@@ -233,11 +235,11 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         train_dataset = cub200_10(args.data, True, transforms.Compose(train_transform_list))
         val_dataset = cub200_10(args.data, False, transforms.Compose(test_transforms_list))
-    train_sampler = None
+
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+        num_workers=args.workers, pin_memory=True, sampler=None)
 
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
@@ -261,28 +263,23 @@ def main_worker(gpu, ngpus_per_node, args):
             imagenet_normalize,
         ]))
 
-    imagenet_train_sampler = None
-
     imagenet_train_loader = torch.utils.data.DataLoader(
         imagenet_train_dataset, batch_size=args.imagenet_batch_size, shuffle=True,
-        num_workers=args.workers, pin_memory=True, sampler=imagenet_train_sampler)
+        num_workers=args.workers, pin_memory=True)
 
     # imagenet_train_loader = None
     criterion = nn.CrossEntropyLoss()
     alpha_params = {}
     beta_params = {}
-    model_device = list(model.parameters())[0].device
+
 
     optimizer = torch.optim.SGD([
-                {'params': [p for name, p in model.named_parameters() if 'mask' not in name], "lr": args.lr},
-                {'params': [p for name, p in model.named_parameters() if 'mask' in name], "lr": args.reg_lr, 'weight_decay': 0}
+                {'params': [p for name, p in model.named_parameters() if 'mask' not in name], "lr": args.lr}, # params 
+                {'params': [p for name, p in model.named_parameters() if 'mask' in name], "lr": args.reg_lr, 'weight_decay': 0} # masks
             ], args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
             
     for m in model.modules():
         if isinstance(m, MaskedConv2d):
-            # assert m.weight_alpha.requires_grad
-            # assert (m.weight_beta.requires_grad)
-            # assert (not m.weight.requires_grad)
             pass
 
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
@@ -336,8 +333,8 @@ def main_worker(gpu, ngpus_per_node, args):
         all_result['train'].append(acc)
         all_result['ta'].append(tacc)
 
-        if epoch % 5 == 0:
-            torch.save(model.state_dict(), os.path.join(args.save_dir, f"model_{epoch}.pth.tar"))
+        # if epoch % 5 == 0:
+        #     torch.save(model.state_dict(), os.path.join(args.save_dir, f"model_{epoch}.pth.tar"))
 
         # remember best prec@1 and save checkpoint
         is_best_sa = tacc  > best_sa
@@ -365,21 +362,6 @@ def main_worker(gpu, ngpus_per_node, args):
     #report result
     print('* best SA={}'.format(all_result['ta'][np.argmax(np.array(all_result['ta']))]))
 
-    all_result = {}
-    all_result['train'] = []
-    all_result['ta'] = []
-
-    best_sa = 0
-    start_epoch = 0
-
-    pruning_model(model.module, 0.2)
-    check_sparsity(model.module, True)
-
-    optimizer = torch.optim.SGD(model.parameters(), 1e-5,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
-
-    args.epochs = 45
 
 if __name__ == '__main__':
     main()
