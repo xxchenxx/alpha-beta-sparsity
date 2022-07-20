@@ -48,7 +48,9 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
             state_dict = model.state_dict()
 
             for key in list(state_dict.keys()):
-                if 'mask_beta' in key: del state_dict[key]
+                if 'mask_beta' in key: 
+                    del state_dict[key]
+
             model_lower.load_state_dict(state_dict)
             weights = []
             alphas = []
