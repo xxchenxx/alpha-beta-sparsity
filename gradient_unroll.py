@@ -43,7 +43,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                     m.set_lower()
             # decrease lr
             previous_lr = optimizer.param_groups[0]['lr']
-            current_lr = args.lower_lr * epoch / args.epochs
+            current_lr = args.lower_lr * (1 - epoch / args.epochs)
             optimizer.param_groups[0]['lr'] = current_lr # params 
             state_dict = model.state_dict()
 
