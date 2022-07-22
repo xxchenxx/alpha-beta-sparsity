@@ -43,7 +43,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
                     m.set_lower()
             # decrease lr
             previous_lr = optimizer.param_groups[0]['lr']
-            current_lr = args.lower_lr * (1 - epoch / args.epochs)
+            current_lr = args.lower_lr # * (1 - epoch / args.epochs)
             optimizer.param_groups[0]['lr'] = current_lr # params 
             state_dict = model.state_dict()
 
@@ -116,7 +116,7 @@ def train_with_imagenet_unroll(train_loader, imagenet_train_loader, model, model
         if not args.no_alpha:
             for m in model.modules():
                 if isinstance(m, MaskedConv2d):
-                    m.mask_alpha.grad.data.sub_(grads[idx] * current_lr)
+                    m.mask_alpha.grad.data.sub_(grads[idx] * current_lr * 10)
                     idx += 1
         else:
             for m in model.modules():
