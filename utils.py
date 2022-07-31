@@ -148,8 +148,8 @@ def train_ATA(train_loader, model, criterion, optimizer, epoch, args):
 
         image = image.cuda()
         target = target.cuda()
-        x = RCNN(x, 0.6)
-        x_hat = Max_phase(model, x) 
+        image = RCNN(image, 0.6)
+        image = Max_phase(model, image) 
         # compute output
         output_clean = model(image)
         loss = criterion(output_clean, target)
