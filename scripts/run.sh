@@ -1,0 +1,4 @@
+NCCL_P2P_DISABLE=1 CUDA_VISIBLE_DEVICES=4,5,6,7 python -u cub_finetune_gradient_unroll.py --imagenet_train_data /ssd1/xinyu/datasets/imagenet_object_localization_challenge/ILSVRC/Data/CLS-LOC/train/ --imagenet_val_data /ssd1/xinyu/datasets/imagenet_object_localization_challenge/ILSVRC/Data/CLS-LOC/val/ --data data/  --rate 0.2 --save_dir cub_unroll_lr_3.5 --epoch 95 --worker 16  --dist-url tcp://127.0.0.1:37703 --lamb 1e-4 --reg-lr 3.5 --imagenet-pretrained --lower_steps 1
+
+
+NCCL_P2P_DISABLE=1 CUDA_VISIBLE_DEVICES=0,1,2,3 python -u cub_finetune_gradient_unroll.py --imagenet_train_data /ssd1/xinyu/datasets/imagenet_object_localization_challenge/ILSVRC/Data/CLS-LOC/train/ --imagenet_val_data /ssd1/xinyu/datasets/imagenet_object_localization_challenge/ILSVRC/Data/CLS-LOC/val/ --data data/  --rate 0.2 --save_dir cub_unroll_lr_3.5_new --epoch 95 --worker 16  --dist-url tcp://127.0.0.1:37704 --lamb 1e-4 --reg-lr 3.5 --imagenet-pretrained --lower_steps 5
