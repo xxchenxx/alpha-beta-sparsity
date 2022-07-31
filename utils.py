@@ -108,7 +108,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
     return top1.avg
 
-import torch.nn.optim as optim
+import torch.optim as optim
 def RCNN(X_n, prob):  # (5, 21, 3, 224, 224)
     N, S, C, H, W = X_n.size()
     p = np.random.rand()
