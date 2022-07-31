@@ -108,6 +108,77 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
     return top1.avg
 
+import torch.nn.optim as optim
+def RCNN(X_n, prob):  # (5, 21, 3, 224, 224)
+    N, S, C, H, W = X_n.size()
+    p = np.random.rand()
+    K = [1, 3, 5, 7, 11, 15]
+    if p > prob:
+        k = K[np.random.randint(0, len(K))]
+        Conv = nn.Conv2d(3, 3, kernel_size=k, stride=1, padding=k//2, bias=False)
+        nn.init.xavier_normal_(Conv.weight)
+        X_n = Conv(X_n.reshape(-1, C, H, W)).reshape(N, S, C, H, W)
+    return X_n.detach()
+
+def Max_phase(model, image, target, criterion, lr=20):
+    image = image.cuda()
+    optimizer = optim.SGD([image.requires_grad_()], lr=20)
+    model.eval()
+    for _ in range(5):
+        optimizer.zero_grad()
+        output_clean = model(image)
+        loss = criterion(output_clean, target)
+        (-loss).backward()
+        optimizer.step()
+    return image.detach()
+
+def train_ATA(train_loader, model, criterion, optimizer, epoch, args):
+
+    losses = AverageMeter()
+    top1 = AverageMeter()
+
+    # switch to train mode
+    model.train()
+
+    start = time.time()
+    for i, (image, target) in enumerate(train_loader):
+
+        if epoch < args.warmup:
+            warmup_lr(epoch, i+1, optimizer, one_epoch_step=len(train_loader), args=args)
+
+        image = image.cuda()
+        target = target.cuda()
+        x = RCNN(x, 0.6)
+        x_hat = Max_phase(model, x) 
+        # compute output
+        output_clean = model(image)
+        loss = criterion(output_clean, target)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        output = output_clean.float()
+        loss = loss.float()
+        # measure accuracy and record loss
+        prec1 = accuracy(output.data, target)[0]
+
+        losses.update(loss.item(), image.size(0))
+        top1.update(prec1.item(), image.size(0))
+
+        if i % args.print_freq == 0:
+            end = time.time()
+            print('Epoch: [{0}][{1}/{2}]\t'
+                'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                'Accuracy {top1.val:.3f} ({top1.avg:.3f})\t'
+                'Time {3:.2f}'.format(
+                    epoch, i, len(train_loader), end-start, loss=losses, top1=top1))
+            start = time.time()
+
+    print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
+
+    return top1.avg
+
 def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, optimizer, epoch, args):
 
     losses = AverageMeter()
