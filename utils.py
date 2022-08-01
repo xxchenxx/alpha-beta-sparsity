@@ -138,20 +138,21 @@ def Max_phase_EU(model, image, target, criterion, lr=80, lamb=1):
     optimizer = optim.SGD([image.requires_grad_()], lr=lr)
     model.eval()
     init_features = None
-    for i in range(5):
-        print(i)
-        optimizer.zero_grad()
-        _, last_features = model(image, with_feature=True)  # (105, 512)
-        if i == 0:
-            init_features = last_features.clone().detach()
+    torch.autograd.set_detect_anomaly(True):
+        for i in range(5):
+            print(i)
+            optimizer.zero_grad()
+            _, last_features = model(image, with_feature=True)  # (105, 512)
+            if i == 0:
+                init_features = last_features.clone().detach()
 
-        output_clean = model(image)
-        class_loss = criterion(output_clean, target)
-        feature_loss = distance_criterion(last_features, init_features)
-        adv_loss = lamb * feature_loss - class_loss
-        adv_loss.backward()
-        optimizer.step()
-        del last_features, class_loss, feature_loss, adv_loss
+            output_clean = model(image)
+            class_loss = criterion(output_clean, target)
+            feature_loss = distance_criterion(last_features, init_features)
+            adv_loss = lamb * feature_loss - class_loss
+            adv_loss.backward()
+            optimizer.step()
+            del last_features, class_loss, feature_loss, adv_loss
 
     return image.detach()
 
@@ -414,7 +415,7 @@ def Max_phase_mmd(model, images, target, criterion, max_lr=80, lamb=1):
     init_features = None
     for i in range(5):
         optimizer.zero_grad()
-        _, last_features = model(image, with_feature=True)  # (105, 512)
+        _, last_features = model(images, with_feature=True)  # (105, 512)
         
         if i == 0:
             init_features = last_features.clone().detach()  # (105, 512)
