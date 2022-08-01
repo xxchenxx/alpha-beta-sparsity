@@ -272,8 +272,6 @@ def main_worker(gpu, ngpus_per_node, args):
         best_sa = 0
         check_sparsity(model, True)
         for epoch in range(start_epoch, args.epochs):
-            if args.distributed:
-                train_sampler.set_epoch(epoch)
 
             print(optimizer.state_dict()['param_groups'][0]['lr'])
 
