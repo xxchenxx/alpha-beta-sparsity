@@ -200,7 +200,7 @@ def main_worker(gpu, ngpus_per_node, args):
         _, rep = model(image, True)
         for j in range(target.shape[0]):
             if target[j] % 20 == 0:
-                representations[target[j]].append(rep[j])
+                representations[int(target[j])].append(rep[j])
     
     labels = []
     for key in representations:
