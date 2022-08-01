@@ -252,7 +252,7 @@ class ResNet(nn.Module):
 
         x = self.avgpool(x)
         rep = torch.flatten(x, 1)
-        return self.fc(rep), self.new_fc(rep)
+        return self.fc(rep)
 
 
     def forward(self, x):

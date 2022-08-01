@@ -132,7 +132,7 @@ def Max_phase(model, image, target, criterion, lr=20):
         optimizer.step()
     return image.detach()
 
-def Max_phase_EU(model, image, lr=80, lamb=1):
+def Max_phase_EU(model, image, target, criterion, lr=80, lamb=1):
     image = image.cuda()
     distance_criterion = nn.MSELoss()
     optimizer = optim.SGD([image.requires_grad_()], lr=lr)
@@ -144,7 +144,8 @@ def Max_phase_EU(model, image, lr=80, lamb=1):
         if i == 0:
             init_features = last_features.clone().detach()
 
-        _, class_loss = model.set_forward_loss(image)
+        output_clean = model(image)
+        class_loss = criterion(output_clean, target)
         feature_loss = distance_criterion(last_features, init_features)
         adv_loss = lamb * feature_loss - class_loss
         adv_loss.backward()
@@ -330,6 +331,53 @@ def train_EU(train_loader, model, criterion, optimizer, epoch, args):
     print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
 
     return top1.avg
+
+def guassian_kernel(source, target, kernel_mul, kernel_num, fix_sigma=None):
+    n_samples = int(source.size()[0])+int(target.size()[0])  # n + m
+    total = torch.cat([source, target], dim=0)  # (n+m, d)
+    AB = torch.mm(total, total.transpose(0, 1))  # (n+m, n+m)
+    AA = (total * total).sum(dim=1, keepdim=True).expand_as(AB)  # (n+m, n+m)
+    BB = (total * total).sum(dim=1).unsqueeze(0).expand_as(AB)  # (n+m, n+m)
+    L2_distance = AA - 2.*AB + BB
+
+    if fix_sigma:
+        bandwidth = fix_sigma
+    else:
+        bandwidth = torch.sum(L2_distance.detach().data) / (n_samples**2-n_samples)
+    bandwidth /= kernel_mul**(kernel_num//2)
+    bandwidth_list = [bandwidth * (kernel_mul**i) for i in range(kernel_num)]
+    kernel_val = [torch.exp(-L2_distance / bandwidth_temp) for bandwidth_temp in bandwidth_list]
+    return sum(kernel_val)
+
+def mmd(source, target, kernel_mul=2., kernel_num=5, fix_sigma=None):
+    batch_size = int(source.size()[0])
+    kernels = guassian_kernel(source, target, kernel_mul=kernel_mul, kernel_num=kernel_num, fix_sigma=fix_sigma)
+    XX = kernels[:batch_size, :batch_size]
+    YY = kernels[batch_size:, batch_size:]
+    XY = kernels[:batch_size, batch_size:]
+    YX = kernels[batch_size:, :batch_size]
+    loss = torch.mean(XX + YY - XY - YX)
+    return loss
+
+def Max_phase_mmd(model, X_n, max_lr=80, lamb=1):
+    X_n = X_n.cuda()
+    optimizer = optim.SGD([X_n.requires_grad_()], lr=max_lr)
+    model.eval()
+    init_features = None
+    for i in range(5):
+        optimizer.zero_grad()
+        last_features = model.feature(X_n.reshape(-1, *X_n.size()[2:]))  # (105, 512)
+        
+        if i == 0:
+            init_features = last_features.clone().detach()  # (105, 512)
+
+        _, class_loss = model.set_forward_loss(X_n)
+        feature_loss = mmd(last_features, init_features)
+        adv_loss = lamb * feature_loss - class_loss
+        adv_loss.backward()
+        optimizer.step()
+        del last_features, class_loss, feature_loss, adv_loss
+    return X_n.detach()
 
 def train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model, model_ema, criterion, optimizer, epoch, args, consistency_weight, consistency_criterion, step):
 
