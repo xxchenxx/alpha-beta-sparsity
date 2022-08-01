@@ -123,7 +123,7 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
 
-    model = models.resnet18(pretrained=False)
+    model = models.resnet18(pretrained=False, num_classes=200)
     if args.checkpoint and not args.resume:
         print(f"LOAD CHECKPOINT {args.checkpoint}")
         checkpoint = torch.load(args.checkpoint,map_location="cpu")
