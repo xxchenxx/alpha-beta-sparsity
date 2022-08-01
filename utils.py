@@ -110,14 +110,14 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
 import torch.optim as optim
 def RCNN(X_n, prob):  # (5, 21, 3, 224, 224)
-    N, S, C, H, W = X_n.size()
+    B, C, H, W = X_n.size()
     p = np.random.rand()
     K = [1, 3, 5, 7, 11, 15]
     if p > prob:
         k = K[np.random.randint(0, len(K))]
         Conv = nn.Conv2d(3, 3, kernel_size=k, stride=1, padding=k//2, bias=False)
         nn.init.xavier_normal_(Conv.weight)
-        X_n = Conv(X_n.reshape(-1, C, H, W)).reshape(N, S, C, H, W)
+        X_n = Conv(X_n)
     return X_n.detach()
 
 def Max_phase(model, image, target, criterion, lr=20):
