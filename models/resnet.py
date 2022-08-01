@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from typing import Optional
+Conv2d = torch.nn.Conv2d
 try:
     from torchvision.models.utils import load_state_dict_from_url
 except:
