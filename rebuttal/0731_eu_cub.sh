@@ -4,9 +4,9 @@
 #BSUB -nnodes 1
 #BSUB -W 720
 #BSUB -G heas
-#BSUB -e 0731.txt
-#BSUB -o 0731.txt
-#BSUB -J 0731
+#BSUB -e 0731_eu_cub.txt
+#BSUB -o 0731_eu_cub.txt
+#BSUB -J 0731_eu_cub
 #BSUB -q pbatch
 cd /usr/workspace/olivare/
 source opence/bin/activate
