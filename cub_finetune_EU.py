@@ -77,7 +77,7 @@ parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 
 ##################################### Pruning setting #################################################
-parser.add_argument('--pruning_times', default=19, type=int, help='overall times of pruning')
+parser.add_argument('--pruning_times', default=1, type=int, help='overall times of pruning')
 parser.add_argument('--rate', default=0.2, type=float, help='pruning rate')
 parser.add_argument('--prune_type', default='lt', type=str, help='IMP type (lt, pt, rewind_lt or pt_trans)')
 parser.add_argument('--world-size', default=1, type=int,
