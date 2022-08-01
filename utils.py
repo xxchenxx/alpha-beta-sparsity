@@ -139,6 +139,7 @@ def Max_phase_EU(model, image, target, criterion, lr=80, lamb=1):
     model.eval()
     init_features = None
     for i in range(5):
+        print(i)
         optimizer.zero_grad()
         last_features = model.module.feature(image)  # (105, 512)
         if i == 0:
