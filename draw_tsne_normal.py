@@ -89,7 +89,7 @@ parser.add_argument('--dist-url', default='tcp://127.0.0.1:35506', type=str,
 parser.add_argument('--dist-backend', default='nccl', type=str,
                     help='distributed backend')
 parser.add_argument("--warmup", default=0)
-
+parser.add_argument("--output_name", default=0)
 def main():
     best_sa = 0
     args = parser.parse_args()
@@ -219,7 +219,7 @@ def main_worker(gpu, ngpus_per_node, args):
     tsne_results = tsne.fit_transform(s)
     print('t-SNE done! Time elapsed: {} seconds'.format(time.time()-time_start))
     df_subset = {}
-    df_subset['y'] = labels
+    df_subset['label'] = labels
     df_subset['tsne-2d-one'] = tsne_results[:,0]
     df_subset['tsne-2d-two'] = tsne_results[:,1]
     plt.figure(figsize=(16,10))
@@ -227,13 +227,13 @@ def main_worker(gpu, ngpus_per_node, args):
     pickle.dump(df_subset, open("result.pkl", "wb"))
     plot = sns.scatterplot(
         x="tsne-2d-one", y="tsne-2d-two",
-        hue="y",
+        hue="label",
         palette=sns.color_palette("hls", 10),
         data=df_subset,
         legend="full",
-        alpha=0.3
+        alpha=1
     )
     fig = plot.get_figure()
-    fig.savefig("out.png") 
+    fig.savefig(args.output_name) 
 if __name__ == '__main__':
     main()
