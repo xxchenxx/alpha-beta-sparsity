@@ -142,11 +142,10 @@ def Max_phase_EU(model, image, target, criterion, lr=80, lamb=1):
         for i in range(5):
             print(i)
             optimizer.zero_grad()
-            _, last_features = model(image, with_feature=True)  # (105, 512)
+            output_clean, last_features = model(image, with_feature=True)  # (105, 512)
             if i == 0:
                 init_features = last_features.clone().detach()
 
-            output_clean = model(image)
             class_loss = criterion(output_clean, target)
             feature_loss = distance_criterion(last_features, init_features)
             adv_loss = lamb * feature_loss - class_loss
@@ -415,12 +414,11 @@ def Max_phase_mmd(model, images, target, criterion, max_lr=80, lamb=1):
     init_features = None
     for i in range(5):
         optimizer.zero_grad()
-        _, last_features = model(images, with_feature=True)  # (105, 512)
+        output_clean, last_features = model(images, with_feature=True)  # (105, 512)
         
         if i == 0:
             init_features = last_features.clone().detach()  # (105, 512)
 
-        output_clean = model(images)
         class_loss = criterion(output_clean, target)
         feature_loss = mmd(last_features, init_features)
         adv_loss = lamb * feature_loss - class_loss
