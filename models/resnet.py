@@ -58,13 +58,13 @@ class MaskedConv2d(nn.Conv2d):
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
-    return MaskedConv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+    return Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                     padding=dilation, groups=groups, bias=False, dilation=dilation)
 
 
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
-    return MaskedConv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+    return Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 
 class BasicBlock(nn.Module):
@@ -236,7 +236,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def _forward_impl(self, x):
+    def _forward_impl(self, x, has_aux=False):
 
         # See note [TorchScript super()]
         x = self.conv1(x)
@@ -251,13 +251,26 @@ class ResNet(nn.Module):
 
         x = self.avgpool(x)
         rep = torch.flatten(x, 1)
-
         return self.fc(rep), self.new_fc(rep)
+
 
     def forward(self, x):
         return self._forward_impl(x)
 
+    def feature(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
 
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+
+        x = self.avgpool(x)
+        rep = torch.flatten(x, 1)
+        return rep
 def _resnet(arch, block, layers, pretrained, progress, **kwargs):
     model = ResNet(block, layers, **kwargs)
     if pretrained:
