@@ -122,7 +122,7 @@ def RCNN(image, prob):  # (5, 21, 3, 224, 224)
 
 def Max_phase(model, image, target, criterion, lr=20):
     image = image.cuda()
-    optimizer = optim.SGD([image.requires_grad_()], lr=20)
+    optimizer = optim.SGD([image.requires_grad_()], lr=lr)
     model.eval()
     for _ in range(5):
         optimizer.zero_grad()
@@ -171,7 +171,7 @@ def train_ATA(train_loader, model, criterion, optimizer, epoch, args):
         image = image.cuda()
         target = target.cuda()
         image = RCNN(image, 0.6)
-        image = Max_phase(model, image, target, criterion) 
+        image = Max_phase(model, image, target, criterion, lr=2) 
         # compute output
         output_clean = model(image)
         loss = criterion(output_clean, target)
