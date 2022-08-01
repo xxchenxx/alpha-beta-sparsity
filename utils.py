@@ -302,7 +302,7 @@ def train_EU(train_loader, model, criterion, optimizer, epoch, args):
         image = image.cuda()
         target = target.cuda()
 
-        image = Max_phase_EU(model, image) 
+        image = Max_phase_EU(model, image, target, criterion) 
         # compute output
         output_clean = model(image)
         loss = criterion(output_clean, target)
