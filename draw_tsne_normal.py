@@ -140,7 +140,6 @@ def main_worker(gpu, ngpus_per_node, args):
              else:
                    load_state_dict[name] = state_dict[name]
         model.load_state_dict(load_state_dict)
-    model.fc = nn.Linear(512, 200)
     from torch.nn import init
     init.kaiming_normal_(model.fc.weight.data)
     
