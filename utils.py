@@ -138,7 +138,7 @@ def Max_phase_EU(model, image, target, criterion, lr=80, lamb=1):
     optimizer = optim.SGD([image.requires_grad_()], lr=lr)
     model.eval()
     init_features = None
-    torch.autograd.set_detect_anomaly(True):
+    with torch.autograd.set_detect_anomaly(True):
         for i in range(5):
             print(i)
             optimizer.zero_grad()
