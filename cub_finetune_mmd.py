@@ -26,7 +26,7 @@ import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-from utils import train_EU, test, save_checkpoint
+from utils import train_mmd, test, save_checkpoint
 from pruning_utils import check_sparsity,extract_mask,prune_model_custom
 import copy
 import torch.nn.utils.prune as prune
@@ -284,7 +284,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
             print(optimizer.state_dict()['param_groups'][0]['lr'])
 
-            acc = train_EU(train_loader, model, criterion, optimizer, epoch, args)
+            acc = train_mmd(train_loader, model, criterion, optimizer, epoch, args)
 
             schedule.step()
             # evaluate on validation set
