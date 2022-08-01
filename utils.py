@@ -141,7 +141,7 @@ def Max_phase_EU(model, image, target, criterion, lr=80, lamb=1):
     for i in range(5):
         print(i)
         optimizer.zero_grad()
-        last_features = model.module.feature(image)  # (105, 512)
+        _, last_features = model(image, with_feature=True)  # (105, 512)
         if i == 0:
             init_features = last_features.clone().detach()
 
@@ -414,7 +414,7 @@ def Max_phase_mmd(model, images, target, criterion, max_lr=80, lamb=1):
     init_features = None
     for i in range(5):
         optimizer.zero_grad()
-        last_features = model.module.feature(images)  # (105, 512)
+        _, last_features = model(image, with_feature=True)  # (105, 512)
         
         if i == 0:
             init_features = last_features.clone().detach()  # (105, 512)

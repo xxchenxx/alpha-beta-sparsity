@@ -237,7 +237,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def _forward_impl(self, x, has_aux=False):
+    def _forward_impl(self, x, with_feature=False):
 
         # See note [TorchScript super()]
         x = self.conv1(x)
@@ -252,26 +252,15 @@ class ResNet(nn.Module):
 
         x = self.avgpool(x)
         rep = torch.flatten(x, 1)
-        return self.fc(rep)
+        if not with_feature:
+            return self.fc(rep)
+        else:
+            return self.fc(rep), rep
 
 
-    def forward(self, x):
-        return self._forward_impl(x)
+    def forward(self, x, with_feature=False):
+        return self._forward_impl(x, with_feature)
 
-    def feature(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-
-        x = self.avgpool(x)
-        rep = torch.flatten(x, 1)
-        return rep
 def _resnet(arch, block, layers, pretrained, progress, **kwargs):
     model = ResNet(block, layers, **kwargs)
     if pretrained:
