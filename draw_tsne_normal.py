@@ -165,14 +165,9 @@ def main_worker(gpu, ngpus_per_node, args):
     train_dataset = cub200(args.data, True, transforms.Compose(train_transform_list))
     val_dataset = cub200(args.data, False, transforms.Compose(test_transforms_list))
 
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-    else:
-        train_sampler = None
-
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+        num_workers=args.workers, pin_memory=True)
 
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
