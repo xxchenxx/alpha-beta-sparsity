@@ -114,7 +114,7 @@ def main():
     args.multiprocessing_distributed=True
 
     ngpus_per_node = torch.cuda.device_count()
-    if True:
+    if False:
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
         args.world_size = ngpus_per_node * args.world_size
