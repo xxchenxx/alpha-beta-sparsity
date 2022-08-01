@@ -146,6 +146,7 @@ def main_worker(gpu, ngpus_per_node, args):
     print('dataparallel mode')
 
     cudnn.benchmark = True
+    model.cuda()
     from cub import cub200
     train_transform_list = [
         transforms.RandomResizedCrop(448),
