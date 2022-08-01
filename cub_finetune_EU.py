@@ -197,14 +197,11 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         train_dataset = cub200_10(args.data, True, transforms.Compose(train_transform_list))
         val_dataset = cub200_10(args.data, False, transforms.Compose(test_transforms_list))
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-    else:
-        train_sampler = None
+    train_sampler = None
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+        train_dataset, batch_size=args.batch_size, shuffle=True,
+        num_workers=args.workers, pin_memory=True)
 
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
@@ -266,8 +263,6 @@ def main_worker(gpu, ngpus_per_node, args):
         best_sa = 0
         check_sparsity(model, True)
         for epoch in range(start_epoch, args.epochs):
-            if args.distributed:
-                train_sampler.set_epoch(epoch)
 
             print(optimizer.state_dict()['param_groups'][0]['lr'])
 
