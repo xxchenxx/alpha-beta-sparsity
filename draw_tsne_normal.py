@@ -189,31 +189,31 @@ def main_worker(gpu, ngpus_per_node, args):
     model.eval()
 
     start = time.time()
+    with torch.no_grad():
+        representations = {i: [] for i in range(0, 200, 20)}
+        for i, (image, target) in enumerate(train_loader):
 
-    representations = {i: [] for i in range(0, 200, 20)}
-    for i, (image, target) in enumerate(train_loader):
+            image = image.cuda()
+            target = target.cuda()
 
-        image = image.cuda()
-        target = target.cuda()
+            # compute output
+            _, rep = model(image, True)
+            for j in range(target.shape[0]):
+                if target[j] % 20 == 0:
+                    representations[int(target[j])].append(rep[j])
+        
+        labels = []
+        for key in representations:
+            representations[key] = torch.stack(representations[key])
+            labels.extend([key] * representations[key].shape[0])
+        from sklearn.manifold import TSNE
 
-        # compute output
-        _, rep = model(image, True)
-        for j in range(target.shape[0]):
-            if target[j] % 20 == 0:
-                representations[int(target[j])].append(rep[j])
-    
-    labels = []
-    for key in representations:
-        representations[key] = torch.stack(representations[key])
-        labels.extend([key] * representations[key].shape[0])
-    from sklearn.manifold import TSNE
-
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    s = []
-    for key in representations:
-        s.append(representations[key])
-    s = torch.cat(s, 0).cpu().numpy()
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        s = []
+        for key in representations:
+            s.append(representations[key])
+        s = torch.cat(s, 0).cpu().numpy()
     time_start = time.time()
     tsne = TSNE(n_components=2, verbose=1, perplexity=40, n_iter=300)
     tsne_results = tsne.fit_transform(s)
