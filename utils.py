@@ -140,7 +140,6 @@ def Max_phase_EU(model, image, target, criterion, lr=80, lamb=1):
     init_features = None
     with torch.autograd.set_detect_anomaly(True):
         for i in range(5):
-            print(i)
             optimizer.zero_grad()
             output_clean, last_features = model(image, with_feature=True)  # (105, 512)
             if i == 0:
