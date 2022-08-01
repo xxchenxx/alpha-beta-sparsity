@@ -132,16 +132,6 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
 
-    # create model
-    if args.distributed:
-        if args.dist_url == "env://" and args.rank == -1:
-            args.rank = int(os.environ["RANK"])
-        if args.multiprocessing_distributed:
-            # For multiprocessing distributed training, rank needs to be the
-            # global rank among all the processes
-            args.rank = args.rank * ngpus_per_node + gpu
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                world_size=args.world_size, rank=args.rank)
 
     model = resnet18(pretrained=False, num_classes=1000)
     if args.checkpoint and not args.resume:
@@ -163,14 +153,14 @@ def main_worker(gpu, ngpus_per_node, args):
     model.fc = nn.Linear(512, 200)
     from torch.nn import init
     init.kaiming_normal_(model.fc.weight.data)
-    process_group = torch.distributed.new_group(list(range(args.world_size)))
-    model = nn.SyncBatchNorm.convert_sync_batchnorm(model, process_group)
+
 
     # init pretrianed weight
     ticket_init_weight = deepcopy(model.state_dict())
 
     print('dataparallel mode')
     if args.gpu is not None:
+        assert False
         torch.cuda.set_device(args.gpu)
         model.cuda(args.gpu)
         # When using a single GPU per process and per
@@ -178,12 +168,12 @@ def main_worker(gpu, ngpus_per_node, args):
         # ourselves based on the total number of GPUs we have
         args.batch_size = int(args.batch_size / ngpus_per_node)
         args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+        model = torch.nn.parallel.DataParallel(model)
     else:
         model.cuda()
         # DistributedDataParallel will divide and allocate batch_size to all
         # available GPUs if device_ids are not set
-        model = torch.nn.parallel.DistributedDataParallel(model)
+        model = torch.nn.parallel.DataParallel(model)
 
     # Data loading code
     initialization = copy.deepcopy(model.module.state_dict())
