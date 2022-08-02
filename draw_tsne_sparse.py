@@ -141,7 +141,6 @@ def main_worker(gpu, ngpus_per_node, args):
                    load_state_dict[name] = state_dict[name]
         model.load_state_dict(load_state_dict)
         epoch = checkpoint['epoch']
-        model.load_state_dict(checkpoint['state_dict'])
 
         for m in model.modules():
             if isinstance(m, MaskedConv2d):
