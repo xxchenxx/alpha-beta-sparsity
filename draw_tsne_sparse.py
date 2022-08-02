@@ -146,6 +146,7 @@ def main_worker(gpu, ngpus_per_node, args):
         for m in model.modules():
             if isinstance(m, MaskedConv2d):
                 m.epsilon = 0.1 * (0.9) ** epoch
+                m.set_upper()
     from torch.nn import init
     init.kaiming_normal_(model.fc.weight.data)
     
