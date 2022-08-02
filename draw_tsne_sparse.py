@@ -203,7 +203,7 @@ def main_worker(gpu, ngpus_per_node, args):
             target = target.cuda()
 
             # compute output
-            _, rep = model(image, True)
+            _, rep = model(image)
             for j in range(target.shape[0]):
                 if target[j] % 20 == 0:
                     representations[int(target[j])].append(rep[j])
