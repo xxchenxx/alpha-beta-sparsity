@@ -134,11 +134,6 @@ def main_worker(gpu, ngpus_per_node, args):
         checkpoint = torch.load(args.checkpoint,map_location="cpu")
         state_dict = checkpoint['state_dict']
         load_state_dict = {}
-        start_state = checkpoint['state']
-        if start_state:
-            current_mask = extract_mask(checkpoint['state_dict'])
-            prune_model_custom(model, current_mask, conv1=True)
-            check_sparsity(model)
         for name in state_dict:
              if name.startswith("module."):
                    load_state_dict[name[7:]]=state_dict[name]
