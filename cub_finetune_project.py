@@ -91,6 +91,7 @@ parser.add_argument('--dist-url', default='tcp://127.0.0.1:35506', type=str,
 parser.add_argument('--dist-backend', default='nccl', type=str,
                     help='distributed backend')
 parser.add_argument("--warmup", default=0)
+parser.add_argument('--ten-shot', action="store_true")
 
 def main():
     best_sa = 0
@@ -193,7 +194,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # Data loading code
     initialization = copy.deepcopy(model.module.state_dict())
     cudnn.benchmark = True
-    from cub import cub200
+    from cub import cub200, cub200_10
     train_transform_list = [
         transforms.RandomResizedCrop(448),
         transforms.RandomHorizontalFlip(),
@@ -209,8 +210,12 @@ def main_worker(gpu, ngpus_per_node, args):
                                  std=(0.229, 0.224, 0.225))
 
     ]
-    train_dataset = cub200(args.data, True, transforms.Compose(train_transform_list))
-    val_dataset = cub200(args.data, False, transforms.Compose(test_transforms_list))
+    if not args.ten_shot:
+        train_dataset = cub200(args.data, True, transforms.Compose(train_transform_list))
+        val_dataset = cub200(args.data, False, transforms.Compose(test_transforms_list))
+    else:
+        train_dataset = cub200_10(args.data, True, transforms.Compose(train_transform_list))
+        val_dataset = cub200_10(args.data, False, transforms.Compose(test_transforms_list))
 
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
