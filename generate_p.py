@@ -134,7 +134,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # create model
 
-    model = models.resnet18(pretrained=True)
+    model = models.resnet18(pretrained=False)
     if args.checkpoint and not args.resume:
         print(f"LOAD CHECKPOINT {args.checkpoint}")
         checkpoint = torch.load(args.checkpoint,map_location="cpu")
