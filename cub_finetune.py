@@ -191,7 +191,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # Data loading code
     initialization = copy.deepcopy(model.module.state_dict())
     cudnn.benchmark = True
-    from cub import cub200
+    from cub import cub200, cub200_10
     train_transform_list = [
         transforms.RandomResizedCrop(448),
         transforms.RandomHorizontalFlip(),
