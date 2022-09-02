@@ -214,16 +214,16 @@ def main_worker(gpu, ngpus_per_node, args):
         ############################################################################
         # if i % 2 != 0: continue
         try:
-            model.load_state_dict(torch.load(f'cub/0epoch_{i}.pth.tar', map_location='cpu')['state_dict'])
+            model.load_state_dict(torch.load(f'{args.save_dir}/0epoch_{i}.pth.tar', map_location='cpu')['state_dict'])
         except:
-            model.module.load_state_dict(torch.load(f'cub/0epoch_{i}.pth.tar', map_location='cpu')['state_dict'])
+            model.module.load_state_dict(torch.load(f'{args.save_dir}/0epoch_{i}.pth.tar', map_location='cpu')['state_dict'])
 
         W.append(get_model_param_vec(model))
     W = np.array(W)
     print ('W:', W.shape)
 
     # Obtain base variables through PCA
-    pca = PCA(n_components=60)
+    pca = PCA(n_components=40)
     pca.fit_transform(W)
     P = np.array(pca.components_)
     print ('ratio:', pca.explained_variance_ratio_)
@@ -231,7 +231,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     P = torch.from_numpy(P).cuda()
 
-    torch.save(P, 'res18_CUB200_P_60.pth.tar')
+    torch.save(P, f'{args.save_dir}/res18_CUB200_P.pth.tar')
 
 if __name__ == '__main__':
     main()
