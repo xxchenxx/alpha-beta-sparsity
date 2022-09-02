@@ -65,6 +65,7 @@ parser.add_argument('--seed', default=None, type=int, help='random seed')
 parser.add_argument('--random', action="store_true", help="using random-init model")
 parser.add_argument('--checkpoint', type=str, default=None, help='checkpoint file')
 parser.add_argument('--resume', type=str, default=None, help='checkpoint file')
+parser.add_argument('--P', type=str, default=None, help='checkpoint file')
 parser.add_argument('--print_freq', default=50, type=int, help='print frequency')
 parser.add_argument('--save_dir', help='The directory used to save the trained models', default=None, type=str)
 
@@ -271,15 +272,7 @@ def main_worker(gpu, ngpus_per_node, args):
         start_epoch = 0
         start_state = 0
     print('######################################## Start Standard Training Iterative Pruning ########################################')
-    save_checkpoint({
-        'state': 0,
-        'result': all_result,
-        'epoch': 0,
-        'state_dict': model.state_dict(),
-        'best_sa': 0,
-        'optimizer': optimizer.state_dict(),
-        'scheduler': schedule.state_dict(),
-    }, is_SA_best=False, pruning=0, save_path=args.save_dir, filename=f'epoch_0.pth.tar')
+
     for state in range(start_state, args.pruning_times):
 
         print('******************************************')
@@ -287,7 +280,7 @@ def main_worker(gpu, ngpus_per_node, args):
         print('******************************************')
         best_sa = 0
         check_sparsity(model, True)
-        p = torch.load('res18_CUB200_P_60.pth.tar').to(model.device)
+        p = torch.load(args.P).to(model.device)
         for epoch in range(start_epoch, args.epochs):
             if args.distributed:
                 train_sampler.set_epoch(epoch)
@@ -318,7 +311,7 @@ def main_worker(gpu, ngpus_per_node, args):
                     'best_sa': best_sa,
                     'optimizer': optimizer.state_dict(),
                     'scheduler': schedule.state_dict(),
-                }, is_SA_best=is_best_sa, pruning=state, save_path=args.save_dir, filename=f'epoch_{epoch + 1}.pth.tar')
+                }, is_SA_best=is_best_sa, pruning=state, save_path=args.save_dir, filename=f'checkpoint.pth.tar')
 
             plt.plot(all_result['train'], label='train_acc')
             plt.plot(all_result['ta'], label='val_acc')
