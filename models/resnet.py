@@ -30,25 +30,13 @@ model_urls = {
 class MaskedConv2d(nn.Conv2d):
     def set_incremental_weights(self, beta=True) -> None:
         # self.register_parameter('weight_beta', torch.nn.Parameter(torch.zeros_like(self.weight.data)))
-        self.register_parameter('mask_alpha', torch.nn.Parameter(torch.ones_like(self.weight.data)))
-        if beta:
-            self.register_parameter('mask_beta', torch.nn.Parameter(torch.ones_like(self.weight.data)))
+        self.register_parameter('mask', torch.nn.Parameter(torch.ones_like(self.weight.data)))
         self.weight.requires_grad = True
-        self.mode = 'lower'
         self.epsilon = 0.1
         self.beta = beta
-    
-    def set_lower(self) -> None:
-        self.mode = 'lower'
-    
-    def set_upper(self) -> None:
-        self.mode = 'upper'
 
     def forward(self, input):
-        if self.mode == 'lower': 
-            weight = (self.weight) * (self.mask_alpha ** 2) / (self.mask_alpha ** 2 + self.epsilon)
-        else:
-            weight = (self.weight) * (self.mask_alpha ** 2) / (self.mask_alpha ** 2 + self.epsilon) * (self.mask_beta ** 2) / (self.mask_beta ** 2 + self.epsilon) 
+        weight = (self.weight) * (self.mask ** 2) / (self.mask ** 2 + self.epsilon)
 
         #print(weight)
         if torch.__version__ > "1.7.1":
@@ -237,7 +225,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def _forward_impl(self, x, with_feature=False):
+    def _forward_impl(self, x, high=True):
 
         # See note [TorchScript super()]
         x = self.conv1(x)
@@ -252,14 +240,13 @@ class ResNet(nn.Module):
 
         x = self.avgpool(x)
         rep = torch.flatten(x, 1)
-        if not with_feature:
+        if high:
             return self.fc(rep)
         else:
-            return self.fc(rep), rep
+            return self.new_fc(rep)
 
-
-    def forward(self, x, with_feature=False):
-        return self._forward_impl(x, with_feature)
+    def forward(self, x, high=True):
+        return self._forward_impl(x, high)
 
 def _resnet(arch, block, layers, pretrained, progress, **kwargs):
     model = ResNet(block, layers, **kwargs)

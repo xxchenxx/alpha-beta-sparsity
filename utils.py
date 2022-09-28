@@ -15,7 +15,7 @@ from models.resnet import MaskedConv2d
 
 __all__ = ['setup_model_dataset', 'setup_seed',
             'train', 'test',
-            'save_checkpoint', 'load_weight_pt_trans', 'load_ticket']
+            'save_checkpoint', 'load_weight_pt_trans', 'load_ticket', 'train_mix']
 
 def setup_model_dataset(args):
 
@@ -88,6 +88,61 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         optimizer.step()
 
         output = output_clean.float()
+        loss = loss.float()
+        # measure accuracy and record loss
+        prec1 = accuracy(output.data, target)[0]
+
+        losses.update(loss.item(), image.size(0))
+        top1.update(prec1.item(), image.size(0))
+
+        if i % args.print_freq == 0:
+            end = time.time()
+            print('Epoch: [{0}][{1}/{2}]\t'
+                'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                'Accuracy {top1.val:.3f} ({top1.avg:.3f})\t'
+                'Time {3:.2f}'.format(
+                    epoch, i, len(train_loader), end-start, loss=losses, top1=top1))
+            start = time.time()
+
+    print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
+
+    return top1.avg
+
+def train_mix(train_loader, train_imagenet_loader, model, criterion, optimizer, epoch, args):
+
+    losses = AverageMeter()
+    top1 = AverageMeter()
+
+    # switch to train mode
+    model.train()
+    imagenet_iter = iter(train_imagenet_loader)
+    start = time.time()
+    for i, (image, target) in enumerate(train_loader):
+
+        if epoch < args.warmup:
+            warmup_lr(epoch, i+1, optimizer, one_epoch_step=len(train_loader), args=args)
+
+        image = image.cuda()
+        target = target.cuda()
+
+        # compute output
+        output = model(image)
+        loss = criterion(output, target)
+        optimizer.zero_grad()
+        # loss.backward()
+
+        imagenet_image, imagenet_target = next(imagenet_iter)
+        imagenet_image = imagenet_image.cuda()
+        imagenet_target = imagenet_target.cuda()
+
+        # compute output
+        output_new = model(imagenet_image, high=False)
+        loss += criterion(output_new, imagenet_target)
+        loss.backward()
+
+        optimizer.step()
+
+        output = output.float()
         loss = loss.float()
         # measure accuracy and record loss
         prec1 = accuracy(output.data, target)[0]
@@ -657,14 +712,9 @@ def test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_pa
 
     # switch to evaluate mode
     model.eval()
-    if log:
-        for name, m in model.named_modules():
+    for name, m in model.named_modules():
             if isinstance(m, MaskedConv2d):
-                m.set_upper()
-                print(name)
-                print(((m.mask_beta ** 2) / ((m.mask_beta ** 2) + m.epsilon)).mean())
-                print(((m.mask_alpha ** 2) / ((m.mask_alpha ** 2) + m.epsilon)).mean())
-                print(((m.mask_alpha ** 2) / ((m.mask_alpha ** 2) + m.epsilon) * (m.mask_beta ** 2) / ((m.mask_beta ** 2) + m.epsilon)).mean())
+                print(((m.mask ** 2) / ((m.mask ** 2) + m.epsilon)).mean())
             
 
     for i, (image, target) in enumerate(val_loader):
