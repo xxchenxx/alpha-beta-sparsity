@@ -206,7 +206,7 @@ def main_worker(gpu, ngpus_per_node, args):
             transforms.Resize(int(448/0.875)),
             transforms.CenterCrop(448),
             transforms.ToTensor(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406), 
                                  std=(0.229, 0.224, 0.225))
 
     ]
