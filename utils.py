@@ -15,7 +15,7 @@ from models.resnet import MaskedConv2d
 
 __all__ = ['setup_model_dataset', 'setup_seed',
             'train', 'test',
-            'save_checkpoint', 'load_weight_pt_trans', 'load_ticket']
+            'save_checkpoint', 'load_weight_pt_trans', 'load_ticket', 'train_mix']
 
 def setup_model_dataset(args):
 
@@ -188,21 +188,76 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
     return top1.avg
 
+def train_mix(train_loader, train_imagenet_loader, model, criterion, optimizer, epoch, args):
+
+    losses = AverageMeter()
+    top1 = AverageMeter()
+
+    # switch to train mode
+    model.train()
+    imagenet_iter = iter(train_imagenet_loader)
+    start = time.time()
+    for i, (image, target) in enumerate(train_loader):
+
+        if epoch < args.warmup:
+            warmup_lr(epoch, i+1, optimizer, one_epoch_step=len(train_loader), args=args)
+
+        image = image.cuda()
+        target = target.cuda()
+
+        # compute output
+        output = model(image)
+        loss = criterion(output, target)
+        optimizer.zero_grad()
+        # loss.backward()
+
+        imagenet_image, imagenet_target = next(imagenet_iter)
+        imagenet_image = imagenet_image.cuda()
+        imagenet_target = imagenet_target.cuda()
+
+        # compute output
+        output_new = model(imagenet_image, high=False)
+        loss += criterion(output_new, imagenet_target)
+        loss.backward()
+
+        optimizer.step()
+
+        output = output.float()
+        loss = loss.float()
+        # measure accuracy and record loss
+        prec1 = accuracy(output.data, target)[0]
+
+        losses.update(loss.item(), image.size(0))
+        top1.update(prec1.item(), image.size(0))
+
+        if i % args.print_freq == 0:
+            end = time.time()
+            print('Epoch: [{0}][{1}/{2}]\t'
+                'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                'Accuracy {top1.val:.3f} ({top1.avg:.3f})\t'
+                'Time {3:.2f}'.format(
+                    epoch, i, len(train_loader), end-start, loss=losses, top1=top1))
+            start = time.time()
+
+    print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
+
+    return top1.avg
+
 import torch.optim as optim
-def RCNN(X_n, prob):  # (5, 21, 3, 224, 224)
-    B, C, H, W = X_n.size()
+def RCNN(image, prob):  # (5, 21, 3, 224, 224)
+    B, C, H, W = image.size()
     p = np.random.rand()
     K = [1, 3, 5, 7, 11, 15]
     if p > prob:
         k = K[np.random.randint(0, len(K))]
-        Conv = nn.Conv2d(3, 3, kernel_size=k, stride=1, padding=k//2, bias=False)
+        Conv = nn.Conv2d(3, 3, kernel_size=k, stride=1, padding=k//2, bias=False).cuda()
         nn.init.xavier_normal_(Conv.weight)
-        X_n = Conv(X_n)
-    return X_n.detach()
+        image = Conv(image)
+    return image.detach()
 
 def Max_phase(model, image, target, criterion, lr=20):
     image = image.cuda()
-    optimizer = optim.SGD([image.requires_grad_()], lr=20)
+    optimizer = optim.SGD([image.requires_grad_()], lr=lr)
     model.eval()
     for _ in range(5):
         optimizer.zero_grad()
@@ -210,6 +265,28 @@ def Max_phase(model, image, target, criterion, lr=20):
         loss = criterion(output_clean, target)
         (-loss).backward()
         optimizer.step()
+    return image.detach()
+
+def Max_phase_EU(model, image, target, criterion, lr=80, lamb=1):
+    image = image.cuda()
+    distance_criterion = nn.MSELoss()
+    optimizer = optim.SGD([image.requires_grad_()], lr=lr)
+    model.eval()
+    init_features = None
+    with torch.autograd.set_detect_anomaly(True):
+        for i in range(5):
+            optimizer.zero_grad()
+            output_clean, last_features = model(image, with_feature=True)  # (105, 512)
+            if i == 0:
+                init_features = last_features.clone().detach()
+
+            class_loss = criterion(output_clean, target)
+            feature_loss = distance_criterion(last_features, init_features)
+            adv_loss = lamb * feature_loss - class_loss
+            adv_loss.backward()
+            optimizer.step()
+            del last_features, class_loss, feature_loss, adv_loss
+
     return image.detach()
 
 def train_ATA(train_loader, model, criterion, optimizer, epoch, args):
@@ -229,7 +306,7 @@ def train_ATA(train_loader, model, criterion, optimizer, epoch, args):
         image = image.cuda()
         target = target.cuda()
         image = RCNN(image, 0.6)
-        image = Max_phase(model, image, target, criterion) 
+        image = Max_phase(model, image, target, criterion, lr=2) 
         # compute output
         output_clean = model(image)
         loss = criterion(output_clean, target)
@@ -343,6 +420,146 @@ def train_with_imagenet(train_loader, imagenet_train_loader, model, criterion, o
 
     return top1.avg
 
+def train_EU(train_loader, model, criterion, optimizer, epoch, args):
+
+    losses = AverageMeter()
+    top1 = AverageMeter()
+
+    # switch to train mode
+    model.train()
+
+    start = time.time()
+    for i, (image, target) in enumerate(train_loader):
+
+        if epoch < args.warmup:
+            warmup_lr(epoch, i+1, optimizer, one_epoch_step=len(train_loader), args=args)
+
+        image = image.cuda()
+        target = target.cuda()
+
+        image = Max_phase_EU(model, image, target, criterion) 
+        # compute output
+        output_clean = model(image)
+        loss = criterion(output_clean, target)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        output = output_clean.float()
+        loss = loss.float()
+        # measure accuracy and record loss
+        prec1 = accuracy(output.data, target)[0]
+
+        losses.update(loss.item(), image.size(0))
+        top1.update(prec1.item(), image.size(0))
+
+        if i % args.print_freq == 0:
+            end = time.time()
+            print('Epoch: [{0}][{1}/{2}]\t'
+                'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                'Accuracy {top1.val:.3f} ({top1.avg:.3f})\t'
+                'Time {3:.2f}'.format(
+                    epoch, i, len(train_loader), end-start, loss=losses, top1=top1))
+            start = time.time()
+
+    print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
+
+    return top1.avg
+
+def train_mmd(train_loader, model, criterion, optimizer, epoch, args):
+
+    losses = AverageMeter()
+    top1 = AverageMeter()
+
+    # switch to train mode
+    model.train()
+
+    start = time.time()
+    for i, (image, target) in enumerate(train_loader):
+
+        if epoch < args.warmup:
+            warmup_lr(epoch, i+1, optimizer, one_epoch_step=len(train_loader), args=args)
+
+        image = image.cuda()
+        target = target.cuda()
+
+        image = Max_phase_mmd(model, image, target, criterion) 
+        # compute output
+        output_clean = model(image)
+        loss = criterion(output_clean, target)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        output = output_clean.float()
+        loss = loss.float()
+        # measure accuracy and record loss
+        prec1 = accuracy(output.data, target)[0]
+
+        losses.update(loss.item(), image.size(0))
+        top1.update(prec1.item(), image.size(0))
+
+        if i % args.print_freq == 0:
+            end = time.time()
+            print('Epoch: [{0}][{1}/{2}]\t'
+                'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                'Accuracy {top1.val:.3f} ({top1.avg:.3f})\t'
+                'Time {3:.2f}'.format(
+                    epoch, i, len(train_loader), end-start, loss=losses, top1=top1))
+            start = time.time()
+
+    print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
+
+    return top1.avg
+    
+def guassian_kernel(source, target, kernel_mul, kernel_num, fix_sigma=None):
+    n_samples = int(source.size()[0])+int(target.size()[0])  # n + m
+    total = torch.cat([source, target], dim=0)  # (n+m, d)
+    AB = torch.mm(total, total.transpose(0, 1))  # (n+m, n+m)
+    AA = (total * total).sum(dim=1, keepdim=True).expand_as(AB)  # (n+m, n+m)
+    BB = (total * total).sum(dim=1).unsqueeze(0).expand_as(AB)  # (n+m, n+m)
+    L2_distance = AA - 2.*AB + BB
+
+    if fix_sigma:
+        bandwidth = fix_sigma
+    else:
+        bandwidth = torch.sum(L2_distance.detach().data) / (n_samples**2-n_samples)
+    bandwidth /= kernel_mul**(kernel_num//2)
+    bandwidth_list = [bandwidth * (kernel_mul**i) for i in range(kernel_num)]
+    kernel_val = [torch.exp(-L2_distance / bandwidth_temp) for bandwidth_temp in bandwidth_list]
+    return sum(kernel_val)
+
+def mmd(source, target, kernel_mul=2., kernel_num=5, fix_sigma=None):
+    batch_size = int(source.size()[0])
+    kernels = guassian_kernel(source, target, kernel_mul=kernel_mul, kernel_num=kernel_num, fix_sigma=fix_sigma)
+    XX = kernels[:batch_size, :batch_size]
+    YY = kernels[batch_size:, batch_size:]
+    XY = kernels[:batch_size, batch_size:]
+    YX = kernels[batch_size:, :batch_size]
+    loss = torch.mean(XX + YY - XY - YX)
+    return loss
+
+def Max_phase_mmd(model, images, target, criterion, max_lr=80, lamb=1):
+    images = images.cuda()
+    optimizer = optim.SGD([images.requires_grad_()], lr=max_lr)
+    model.eval()
+    init_features = None
+    for i in range(5):
+        optimizer.zero_grad()
+        output_clean, last_features = model(images, with_feature=True)  # (105, 512)
+        
+        if i == 0:
+            init_features = last_features.clone().detach()  # (105, 512)
+
+        class_loss = criterion(output_clean, target)
+        feature_loss = mmd(last_features, init_features)
+        adv_loss = lamb * feature_loss - class_loss
+        adv_loss.backward()
+        optimizer.step()
+        del last_features, class_loss, feature_loss, adv_loss
+    return images.detach()
 
 def train_with_imagenet_mean_teacher(train_loader, imagenet_train_loader, model, model_ema, criterion, optimizer, epoch, args, consistency_weight, consistency_criterion, step):
 
@@ -575,14 +792,9 @@ def test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_pa
 
     # switch to evaluate mode
     model.eval()
-    if log:
-        for name, m in model.named_modules():
+    for name, m in model.named_modules():
             if isinstance(m, MaskedConv2d):
-                m.set_upper()
-                print(name)
-                print(((m.mask_beta ** 2) / ((m.mask_beta ** 2) + m.epsilon)).mean())
-                print(((m.mask_alpha ** 2) / ((m.mask_alpha ** 2) + m.epsilon)).mean())
-                print(((m.mask_alpha ** 2) / ((m.mask_alpha ** 2) + m.epsilon) * (m.mask_beta ** 2) / ((m.mask_beta ** 2) + m.epsilon)).mean())
+                print(((m.mask ** 2) / ((m.mask ** 2) + m.epsilon)).mean())
             
 
     for i, (image, target) in enumerate(val_loader):

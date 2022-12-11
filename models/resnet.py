@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from typing import Optional
+Conv2d = torch.nn.Conv2d
 try:
     from torchvision.models.utils import load_state_dict_from_url
 except:
@@ -29,25 +30,13 @@ model_urls = {
 class MaskedConv2d(nn.Conv2d):
     def set_incremental_weights(self, beta=True) -> None:
         # self.register_parameter('weight_beta', torch.nn.Parameter(torch.zeros_like(self.weight.data)))
-        self.register_parameter('mask_alpha', torch.nn.Parameter(torch.ones_like(self.weight.data)))
-        if beta:
-            self.register_parameter('mask_beta', torch.nn.Parameter(torch.ones_like(self.weight.data)))
+        self.register_parameter('mask', torch.nn.Parameter(torch.ones_like(self.weight.data)))
         self.weight.requires_grad = True
-        self.mode = 'lower'
         self.epsilon = 0.1
         self.beta = beta
-    
-    def set_lower(self) -> None:
-        self.mode = 'lower'
-    
-    def set_upper(self) -> None:
-        self.mode = 'upper'
 
     def forward(self, input):
-        if self.mode == 'lower': 
-            weight = (self.weight) * (self.mask_alpha ** 2) / (self.mask_alpha ** 2 + self.epsilon)
-        else:
-            weight = (self.weight) * (self.mask_alpha ** 2) / (self.mask_alpha ** 2 + self.epsilon) * (self.mask_beta ** 2) / (self.mask_beta ** 2 + self.epsilon) 
+        weight = (self.weight) * (self.mask ** 2) / (self.mask ** 2 + self.epsilon)
 
         #print(weight)
         if torch.__version__ > "1.7.1":
@@ -58,13 +47,13 @@ class MaskedConv2d(nn.Conv2d):
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
-    return MaskedConv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+    return Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                     padding=dilation, groups=groups, bias=False, dilation=dilation)
 
 
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
-    return MaskedConv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+    return Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 
 class BasicBlock(nn.Module):
@@ -175,12 +164,12 @@ class ResNet(nn.Module):
         self.base_width = width_per_group
 
         if not imagenet:
-            self.conv1 = MaskedConv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
+            self.conv1 = Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
             self.bn1 = norm_layer(self.inplanes)
             self.relu = nn.ReLU(inplace=True)
             self.maxpool = nn.Identity()
         else:
-            self.conv1 = MaskedConv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+            self.conv1 = Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
             self.bn1 = nn.BatchNorm2d(self.inplanes)
             self.relu = nn.ReLU(inplace=True)
             self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -196,7 +185,7 @@ class ResNet(nn.Module):
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         for m in self.modules():
-            if isinstance(m, MaskedConv2d):
+            if isinstance(m, Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
@@ -236,7 +225,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def _forward_impl(self, x):
+    def _forward_impl(self, x, high=True):
 
         # See note [TorchScript super()]
         x = self.conv1(x)
@@ -251,12 +240,13 @@ class ResNet(nn.Module):
 
         x = self.avgpool(x)
         rep = torch.flatten(x, 1)
+        if high:
+            return self.fc(rep)
+        else:
+            return self.new_fc(rep)
 
-        return self.fc(rep), self.new_fc(rep)
-
-    def forward(self, x):
-        return self._forward_impl(x)
-
+    def forward(self, x, high=True):
+        return self._forward_impl(x, high)
 
 def _resnet(arch, block, layers, pretrained, progress, **kwargs):
     model = ResNet(block, layers, **kwargs)
