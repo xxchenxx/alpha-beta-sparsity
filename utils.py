@@ -62,6 +62,86 @@ def setup_model_dataset(args):
 
     return model, train_loader, val_loader, test_loader
 
+def get_model_grad_vec(model):
+    # Return the model grad as a vector
+
+    vec = []
+    for name,param in model.named_parameters():
+        vec.append(param.grad.detach().reshape(-1))
+    return torch.cat(vec, 0)
+
+def update_grad(model, grad_vec):
+    idx = 0
+    for name,param in model.named_parameters():
+        arr_shape = param.grad.shape
+        size = 1
+        for i in range(len(list(arr_shape))):
+            size *= arr_shape[i]
+        param.grad.data = grad_vec[idx:idx+size].reshape(arr_shape)
+        idx += size
+
+def P_SGD(model, optimizer, grad, P):
+    # P_plus_BFGS algorithm
+
+    global rho, sigma, Bk, sk, gk_last, grad_res_momentum, gamma, alpha, search_times
+
+    gk = torch.mm(P, grad.reshape(-1,1))
+
+    grad_proj = torch.mm(P.transpose(0, 1), gk)
+    grad_res = grad - grad_proj.reshape(-1)
+
+    # Update the model grad and do a step
+    update_grad(model, grad_proj)
+    optimizer.step()
+
+def train_psgd(train_loader, model, criterion, optimizer, epoch, args, P):
+
+    losses = AverageMeter()
+    top1 = AverageMeter()
+
+    # switch to train mode
+    model.train()
+
+    start = time.time()
+    for i, (image, target) in enumerate(train_loader):
+
+        if epoch < args.warmup:
+            warmup_lr(epoch, i+1, optimizer, one_epoch_step=len(train_loader), args=args)
+
+        image = image.cuda()
+        target = target.cuda()
+
+        # compute output
+        output_clean = model(image)
+        loss = criterion(output_clean, target)
+
+        optimizer.zero_grad()
+        loss.backward()
+        gk = get_model_grad_vec(model)
+        P_SGD(model, optimizer, gk, P)
+
+        output = output_clean.float()
+        loss = loss.float()
+        # measure accuracy and record loss
+        prec1 = accuracy(output.data, target)[0]
+
+        losses.update(loss.item(), image.size(0))
+        top1.update(prec1.item(), image.size(0))
+
+        if i % args.print_freq == 0:
+            end = time.time()
+            print('Epoch: [{0}][{1}/{2}]\t'
+                'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                'Accuracy {top1.val:.3f} ({top1.avg:.3f})\t'
+                'Time {3:.2f}'.format(
+                    epoch, i, len(train_loader), end-start, loss=losses, top1=top1))
+            start = time.time()
+
+    print('train_accuracy {top1.avg:.3f}'.format(top1=top1))
+
+    return top1.avg
+
+
 def train(train_loader, model, criterion, optimizer, epoch, args):
 
     losses = AverageMeter()

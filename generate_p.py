@@ -31,7 +31,6 @@ from pruning_utils import check_sparsity,extract_mask,prune_model_custom
 import copy
 import torch.nn.utils.prune as prune
 
-from models.resnet import resnet18, MaskedConv2d
 
 def pruning_model(model, px=0.2):
 
@@ -90,11 +89,7 @@ parser.add_argument('--dist-url', default='tcp://127.0.0.1:35506', type=str,
 parser.add_argument('--dist-backend', default='nccl', type=str,
                     help='distributed backend')
 parser.add_argument("--warmup", default=0)
-parser.add_argument('--imagenet-pretrained', action="store_true")
-parser.add_argument('--ten-shot', action="store_true")
 
-parser.add_argument('--ten-shot', action="store_true")
->>>>>>> c97dda9a96869f16e6f79b104a1ca42e9bb7e80d
 def main():
     best_sa = 0
     args = parser.parse_args()
@@ -119,7 +114,7 @@ def main():
     args.multiprocessing_distributed=True
 
     ngpus_per_node = torch.cuda.device_count()
-    if True:
+    if False:
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
         args.world_size = ngpus_per_node * args.world_size
@@ -138,26 +133,14 @@ def main_worker(gpu, ngpus_per_node, args):
         print("Use GPU: {} for training".format(args.gpu))
 
     # create model
-    if args.distributed:
-        if args.dist_url == "env://" and args.rank == -1:
-            args.rank = int(os.environ["RANK"])
-        if args.multiprocessing_distributed:
-            # For multiprocessing distributed training, rank needs to be the
-            # global rank among all the processes
-            args.rank = args.rank * ngpus_per_node + gpu
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                world_size=args.world_size, rank=args.rank)
 
-    model = resnet18(pretrained=args.imagenet_pretrained, num_classes=1000, imagenet=True)
+    model = models.resnet18(pretrained=False)
     if args.checkpoint and not args.resume:
         print(f"LOAD CHECKPOINT {args.checkpoint}")
         checkpoint = torch.load(args.checkpoint,map_location="cpu")
-        try:
-            state_dict = checkpoint['state_dict']
-        except KeyError:
-            state_dict = checkpoint
+        state_dict = checkpoint['state_dict']
         load_state_dict = {}
-        start_state = checkpoint['state'] if 'state' in checkpoint else 0
+        start_state = checkpoint['state']
         if start_state:
             current_mask = extract_mask(checkpoint['state_dict'])
             prune_model_custom(model, current_mask, conv1=True)
@@ -171,32 +154,21 @@ def main_worker(gpu, ngpus_per_node, args):
     model.fc = nn.Linear(512, 200)
     from torch.nn import init
     init.kaiming_normal_(model.fc.weight.data)
-    process_group = torch.distributed.new_group(list(range(args.world_size)))
-    model = nn.SyncBatchNorm.convert_sync_batchnorm(model, process_group)
 
     # init pretrianed weight
     ticket_init_weight = deepcopy(model.state_dict())
 
     print('dataparallel mode')
-    if args.gpu is not None:
-        torch.cuda.set_device(args.gpu)
-        model.cuda(args.gpu)
-        # When using a single GPU per process and per
-        # DistributedDataParallel, we need to divide the batch size
-        # ourselves based on the total number of GPUs we have
-        args.batch_size = int(args.batch_size / ngpus_per_node)
-        args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
-    else:
-        model.cuda()
+    
+    model.cuda()
         # DistributedDataParallel will divide and allocate batch_size to all
         # available GPUs if device_ids are not set
-        model = torch.nn.parallel.DistributedDataParallel(model)
+    model = torch.nn.DataParallel(model)
 
     # Data loading code
     initialization = copy.deepcopy(model.module.state_dict())
     cudnn.benchmark = True
-    from cub import cub200, cub200_10
+    from cub import cub200
     train_transform_list = [
         transforms.RandomResizedCrop(448),
         transforms.RandomHorizontalFlip(),
@@ -212,17 +184,10 @@ def main_worker(gpu, ngpus_per_node, args):
                                  std=(0.229, 0.224, 0.225))
 
     ]
-    if not args.ten_shot:
-        train_dataset = cub200(args.data, True, transforms.Compose(train_transform_list))
-        val_dataset = cub200(args.data, False, transforms.Compose(test_transforms_list))
-    else:
-        train_dataset = cub200_10(args.data, True, transforms.Compose(train_transform_list))
-        val_dataset = cub200_10(args.data, False, transforms.Compose(test_transforms_list))
+    train_dataset = cub200(args.data, True, transforms.Compose(train_transform_list))
+    val_dataset = cub200(args.data, False, transforms.Compose(test_transforms_list))
 
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-    else:
-        train_sampler = None
+    train_sampler = None
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=False,
@@ -233,127 +198,40 @@ def main_worker(gpu, ngpus_per_node, args):
         batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
+    from sklearn.decomposition import PCA
+    def get_model_param_vec(model):
+        """
+        Return model parameters as a vector
+        """
+        vec = []
+        for name,param in model.named_parameters():
+            vec.append(param.detach().cpu().numpy().reshape(-1))
+        return np.concatenate(vec, 0)
 
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
+    # W = [get_model_param_vec(model)]
+    W = []
+    for i in range(90):
+        ############################################################################
+        # if i % 2 != 0: continue
+        try:
+            model.load_state_dict(torch.load(f'{args.save_dir}/0epoch_{i}.pth.tar', map_location='cpu')['state_dict'])
+        except:
+            model.module.load_state_dict(torch.load(f'{args.save_dir}/0epoch_{i}.pth.tar', map_location='cpu')['state_dict'])
 
-    schedule = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+        W.append(get_model_param_vec(model))
+    W = np.array(W)
+    print ('W:', W.shape)
 
+    # Obtain base variables through PCA
+    pca = PCA(n_components=40)
+    pca.fit_transform(W)
+    P = np.array(pca.components_)
+    print ('ratio:', pca.explained_variance_ratio_)
+    print ('P:', P.shape)
 
-    if args.resume:
-        if os.path.isfile(args.resume):
-            print("=> loading checkpoint '{}'".format(args.resume))
-            loc = 'cuda:{}'.format(args.gpu)
-            checkpoint = torch.load(args.resume, map_location=loc)
-            args.start_epoch = checkpoint['epoch']
-            start_epoch=args.start_epoch
-            all_result=checkpoint['result']
-            best_sa = checkpoint['best_sa']
-            start_state = checkpoint['state']
-            if start_state:
-                current_mask = extract_mask(checkpoint['state_dict'])
-                prune_model_custom(model.module, current_mask, conv1=True)
-                args.epochs = 45
+    P = torch.from_numpy(P).cuda()
 
-            model.load_state_dict(checkpoint['state_dict'])
-            check_sparsity(model.module)
-
-            optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
-            optimizer.load_state_dict(checkpoint['optimizer'])
-
-            print("=> loaded checkpoint '{}' (state {}, epoch {})"
-                .format(args.resume, checkpoint['state'], checkpoint['epoch']))
-        else:
-            print("=> no checkpoint found at '{}'".format(args.resume))
-
-    else:
-        all_result = {}
-        all_result['train'] = []
-        all_result['test_ta'] = []
-        all_result['ta'] = []
-
-        start_epoch = 0
-        start_state = 0
-    print('######################################## Start Standard Training Iterative Pruning ########################################')
-    save_checkpoint({
-        'state': 0,
-        'result': all_result,
-        'epoch': 0,
-        'state_dict': model.state_dict(),
-        'best_sa': 0,
-        'optimizer': optimizer.state_dict(),
-        'scheduler': schedule.state_dict(),
-    }, is_SA_best=False, pruning=0, save_path=args.save_dir, filename=f'epoch_0.pth.tar')
-    for state in range(start_state, args.pruning_times):
-
-        print('******************************************')
-        print('pruning state', state)
-        print('******************************************')
-        best_sa = 0
-        check_sparsity(model, True)
-        for epoch in range(start_epoch, args.epochs):
-            if args.distributed:
-                train_sampler.set_epoch(epoch)
-
-            print(optimizer.state_dict()['param_groups'][0]['lr'])
-
-            acc = train(train_loader, model, criterion, optimizer, epoch, args)
-
-            schedule.step()
-            # evaluate on validation set
-            tacc, all_outputs, all_targets = test(val_loader, model, criterion, args)
-            # evaluate on test set
-            all_result['train'].append(acc)
-            all_result['ta'].append(tacc)
-
-
-            # remember best prec@1 and save checkpoint
-            is_best_sa = tacc  > best_sa
-            best_sa = max(tacc, best_sa)
-
-            if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                    and args.rank % ngpus_per_node == 0):
-                save_checkpoint({
-                    'state': state,
-                    'result': all_result,
-                    'epoch': epoch + 1,
-                    'state_dict': model.state_dict(),
-                    'best_sa': best_sa,
-                    'optimizer': optimizer.state_dict(),
-                    'scheduler': schedule.state_dict(),
-                    'outputs': all_outputs,
-                    'targets': all_targets,
-                }, is_SA_best=is_best_sa, pruning=state, save_path=args.save_dir)
-
-            plt.plot(all_result['train'], label='train_acc')
-            plt.plot(all_result['ta'], label='val_acc')
-            plt.legend()
-            plt.savefig(os.path.join(args.save_dir, str(state)+'net_train.png'))
-            plt.close()
-
-        #report result
-        check_sparsity(model, True)
-        print('* best SA={}'.format(all_result['ta'][np.argmax(np.array(all_result['ta']))]))
-
-        all_result = {}
-        all_result['train'] = []
-        all_result['ta'] = []
-
-        best_sa = 0
-        start_epoch = 0
-
-        pruning_model(model.module, 0.2)
-        check_sparsity(model.module, True)
-
-        optimizer = torch.optim.SGD(model.parameters(), 1e-5,
-                                    momentum=args.momentum,
-                                    weight_decay=args.weight_decay)
-
-        args.epochs = 45
+    torch.save(P, f'{args.save_dir}/res18_CUB200_P.pth.tar')
 
 if __name__ == '__main__':
     main()
