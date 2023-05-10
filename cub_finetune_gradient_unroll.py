@@ -93,7 +93,7 @@ parser.add_argument("--alpha-init", default=5, type=int)
 parser.add_argument("--sparsity-pen", default=1e-9, type=float)
 parser.add_argument('--l1-reg-beta', type=float, default=1e-6)
 parser.add_argument('--reg-lr', type=float, default=10)
-parser.add_argument('--sign-lr', type=float, default=1e-4)
+parser.add_argument('--sign-lr', type=float, default=1e-5)
 parser.add_argument('--lower-lr', type=float, default=1e-2)
 parser.add_argument('--lamb', type=float, default=1)
 
@@ -328,7 +328,7 @@ def main_worker(gpu, ngpus_per_node, args):
         
         scheduler.step()
         # evaluate on validation set
-        tacc = test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_params)
+        tacc, all_outputs, all_targets = test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_params)
         # evaluate on test set
         all_result['train'].append(acc)
         all_result['ta'].append(tacc)
@@ -350,7 +350,9 @@ def main_worker(gpu, ngpus_per_node, args):
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),
                 'alpha': alpha_params,
-                'beta': beta_params
+                'beta': beta_params,
+                'outputs': all_outputs,
+                'targets': all_targets,
             }, is_SA_best=is_best_sa, pruning=0, save_path=args.save_dir)
 
         plt.plot(all_result['train'], label='train_acc')

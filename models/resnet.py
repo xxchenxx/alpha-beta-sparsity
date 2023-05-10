@@ -27,6 +27,7 @@ model_urls = {
 
 
 class MaskedConv2d(nn.Conv2d):
+    
     def set_incremental_weights(self, beta=True) -> None:
         # self.register_parameter('weight_beta', torch.nn.Parameter(torch.zeros_like(self.weight.data)))
         self.register_parameter('mask_alpha', torch.nn.Parameter(torch.ones_like(self.weight.data)))
@@ -55,7 +56,7 @@ class MaskedConv2d(nn.Conv2d):
         else:
             return self._conv_forward(input, weight) 
 
-
+MaskedConv2d = nn.Conv2d
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
     return MaskedConv2d(in_planes, out_planes, kernel_size=3, stride=stride,
@@ -251,8 +252,10 @@ class ResNet(nn.Module):
 
         x = self.avgpool(x)
         rep = torch.flatten(x, 1)
-
-        return self.fc(rep), self.new_fc(rep)
+        if getattr(self, "new_fc", None) is not None:
+            return self.fc(rep), self.new_fc(rep)
+        else:
+            return self.fc(rep)
 
     def forward(self, x):
         return self._forward_impl(x)

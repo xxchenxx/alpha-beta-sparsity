@@ -31,6 +31,7 @@ from pruning_utils import check_sparsity,extract_mask,prune_model_custom
 import copy
 import torch.nn.utils.prune as prune
 
+from models.resnet import resnet18, MaskedConv2d
 
 def pruning_model(model, px=0.2):
 
@@ -89,6 +90,9 @@ parser.add_argument('--dist-url', default='tcp://127.0.0.1:35506', type=str,
 parser.add_argument('--dist-backend', default='nccl', type=str,
                     help='distributed backend')
 parser.add_argument("--warmup", default=0)
+parser.add_argument('--imagenet-pretrained', action="store_true")
+parser.add_argument('--ten-shot', action="store_true")
+
 
 def main():
     best_sa = 0
@@ -143,7 +147,7 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
 
-    model = models.resnet18(pretrained=False)
+    model = resnet18(pretrained=args.imagenet_pretrained, num_classes=1000, imagenet=True)
     if args.checkpoint and not args.resume:
         print(f"LOAD CHECKPOINT {args.checkpoint}")
         checkpoint = torch.load(args.checkpoint,map_location="cpu")
@@ -188,7 +192,8 @@ def main_worker(gpu, ngpus_per_node, args):
     # Data loading code
     initialization = copy.deepcopy(model.module.state_dict())
     cudnn.benchmark = True
-    from cub import cub200
+    from cub import cub200, cub200_10
+
     train_transform_list = [
         transforms.RandomResizedCrop(448),
         transforms.RandomHorizontalFlip(),
@@ -204,8 +209,12 @@ def main_worker(gpu, ngpus_per_node, args):
                                  std=(0.229, 0.224, 0.225))
 
     ]
-    train_dataset = cub200(args.data, True, transforms.Compose(train_transform_list))
-    val_dataset = cub200(args.data, False, transforms.Compose(test_transforms_list))
+    if not args.ten_shot:
+        train_dataset = cub200(args.data, True, transforms.Compose(train_transform_list))
+        val_dataset = cub200(args.data, False, transforms.Compose(test_transforms_list))
+    else:
+        train_dataset = cub200_10(args.data, True, transforms.Compose(train_transform_list))
+        val_dataset = cub200_10(args.data, False, transforms.Compose(test_transforms_list))
 
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
@@ -285,7 +294,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
             schedule.step()
             # evaluate on validation set
-            tacc = test(val_loader, model, criterion, args)
+            tacc, all_outputs, all_targets = test(val_loader, model, criterion, args)
             # evaluate on test set
             all_result['train'].append(acc)
             all_result['ta'].append(tacc)
@@ -305,6 +314,8 @@ def main_worker(gpu, ngpus_per_node, args):
                     'best_sa': best_sa,
                     'optimizer': optimizer.state_dict(),
                     'scheduler': schedule.state_dict(),
+                    'outputs': all_outputs,
+                    'targets': all_targets,
                 }, is_SA_best=is_best_sa, pruning=state, save_path=args.save_dir)
 
             plt.plot(all_result['train'], label='train_acc')

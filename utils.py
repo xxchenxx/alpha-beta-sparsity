@@ -452,6 +452,8 @@ def test(val_loader, model, criterion, args):
     """
     losses = AverageMeter()
     top1 = AverageMeter()
+    all_outputs = []
+    all_targets = []
 
     # switch to evaluate mode
     model.eval()
@@ -468,7 +470,8 @@ def test(val_loader, model, criterion, args):
 
         output = output.float()
         loss = loss.float()
-
+        all_outputs.append(output)
+        all_targets.append(target)
         # measure accuracy and record loss
         prec1 = accuracy(output.data, target)[0]
         losses.update(loss.item(), image.size(0))
@@ -483,7 +486,9 @@ def test(val_loader, model, criterion, args):
     print('valid_accuracy {top1.avg:.3f}'
         .format(top1=top1))
 
-    return top1.avg
+    all_outputs = torch.cat(all_outputs)
+    all_targets = torch.cat(all_targets)
+    return top1.avg, all_outputs, all_targets
 
 
 def test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_params, log=True):
@@ -492,7 +497,8 @@ def test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_pa
     """
     losses = AverageMeter()
     top1 = AverageMeter()
-
+    all_outputs = []
+    all_targets = []
     # switch to evaluate mode
     model.eval()
     if log:
@@ -517,6 +523,8 @@ def test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_pa
 
         output = output.float()
         loss = loss.float()
+        all_outputs.append(output)
+        all_targets.append(target)
 
         # measure accuracy and record loss
         prec1 = accuracy(output.data, target)[0]
@@ -532,7 +540,9 @@ def test_with_imagenet(val_loader, model, criterion, args, alpha_params, beta_pa
     print('valid_accuracy {top1.avg:.3f}'
         .format(top1=top1))
 
-    return top1.avg
+    all_outputs = torch.cat(all_outputs)
+    all_targets = torch.cat(all_targets)
+    return top1.avg, all_outputs, all_targets
 
 def save_checkpoint(state, is_SA_best, save_path, pruning, filename='checkpoint.pth.tar'):
     filepath = os.path.join(save_path, str(pruning)+filename)
